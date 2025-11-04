@@ -1,0 +1,38 @@
+spring:
+  application:
+    name: prestacol-backend
+  
+  datasource:
+    url: jdbc:postgresql://localhost:5432/prestacol_db
+    username: postgres
+    password: postgres
+    driver-class-name: org.postgresql.Driver
+  
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: true
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+        format_sql: true
+  
+  jackson:
+    serialization:
+      write-dates-as-timestamps: false
+    time-zone: America/Bogota
+
+server:
+  port: 8080
+  servlet:
+    context-path: /api
+
+jwt:
+  secret: prestacol-secret-key-change-in-production-2024
+  expiration: 86400000
+
+logging:
+  level:
+    org.springframework.security: DEBUG
+    com.prestamos: DEBUG
+
