@@ -3,36 +3,68 @@ spring:
     name: prestacol-backend
   
   datasource:
-    url: jdbc:postgresql://localhost:5432/prestacol_db
+    # Configuración para Supabase (Proyecto: ijskcroggxijvxronqy)
+    # Para obtener el password: Supabase Dashboard → Project Settings → Database → "Restablecer contraseña"
+    url: jdbc:postgresql://db.ijjskcroggxijvxronqy.supabase.co:5432/postgres?sslmode=require
     username: postgres
-    password: postgres
+    password: 2167296210a
     driver-class-name: org.postgresql.Driver
+    hikari:
+      maximum-pool-size: 10  # Ajustado para Supabase (máximo 15 conexiones compartidas)
+      minimum-idle: 2
+      connection-timeout: 30000
+      idle-timeout: 600000
+      max-lifetime: 1800000
+      leak-detection-threshold: 60000
   
   jpa:
     hibernate:
       ddl-auto: update
-    show-sql: true
+    show-sql: false
     properties:
       hibernate:
         dialect: org.hibernate.dialect.PostgreSQLDialect
         format_sql: true
+        jdbc:
+          batch_size: 20
+        order_inserts: true
+        order_updates: true
+        generate_statistics: false
+    open-in-view: false
   
   jackson:
     serialization:
       write-dates-as-timestamps: false
     time-zone: America/Bogota
+    default-property-inclusion: non_null
+  
+  cache:
+    type: simple
+    cache-names: prestamos, usuarios
+    simple:
+      cache-spec: maximumSize=500,expireAfterWrite=10m
 
 server:
   port: 8080
   servlet:
     context-path: /api
+  compression:
+    enabled: true
+    mime-types: application/json,application/xml,text/html,text/xml,text/plain
+  http2:
+    enabled: true
 
 jwt:
-  secret: prestacol-secret-key-change-in-production-2024
+  secret: prestacol-secret-key-change-in-production-2024-must-be-at-least-32-characters-long
   expiration: 86400000
 
 logging:
   level:
-    org.springframework.security: DEBUG
-    com.prestamos: DEBUG
+    org.springframework.security: INFO
+    com.prestamos: INFO
+    org.hibernate.SQL: WARN
+    org.hibernate.type.descriptor.sql.BasicBinder: WARN
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss} - %msg%n"
+    file: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n"
 

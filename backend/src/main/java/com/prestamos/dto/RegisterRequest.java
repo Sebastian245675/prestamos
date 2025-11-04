@@ -22,5 +22,7 @@ public class RegisterRequest {
     private String password;
     
     private String tipoSuscripcion = "MENSUAL";
+    
+    private String codigoReferido; // Código de referido opcional
 }
 

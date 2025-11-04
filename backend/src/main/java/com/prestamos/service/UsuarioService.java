@@ -1,7 +1,6 @@
 package com.prestamos.service;
 
 import com.prestamos.dto.RegisterRequest;
-import com.prestamos.entity.Suscripcion;
 import com.prestamos.entity.Usuario;
 import com.prestamos.repository.UsuarioRepository;
 import lombok.RequiredArgsConstructor;
@@ -38,7 +37,7 @@ public class UsuarioService {
         LocalDate fechaVencimiento;
         BigDecimal monto;
         
-        if ("ANUAL".equals(request.getTipoSuscripcion)) {
+        if ("ANUAL".equals(request.getTipoSuscripcion())) {
             fechaVencimiento = fechaInicio.plusYears(1);
             monto = new BigDecimal("270000");
         } else {
@@ -50,7 +49,15 @@ public class UsuarioService {
         usuario.setFechaVencimientoSuscripcion(fechaVencimiento);
         usuario.setSuscripcionActiva(true);
         
-        return usuarioRepository.save(usuario);
+        // Guardar primero para obtener el ID
+        usuario = usuarioRepository.save(usuario);
+        
+        // Generar código de referido único con el ID real
+        String codigoReferido = generarCodigoReferido(usuario.getId());
+        usuario.setCodigoReferido(codigoReferido);
+        usuario = usuarioRepository.save(usuario);
+        
+        return usuario;
     }
     
     @Transactional
@@ -84,6 +91,22 @@ public class UsuarioService {
     public java.util.List<Usuario> obtenerCobradores(Long prestamistaId) {
         return usuarioRepository.findByRolAndPrestamistaId(
             Usuario.RolUsuario.COBRADOR, prestamistaId);
+    }
+    
+    public Optional<Usuario> findById(Long id) {
+        return usuarioRepository.findById(id);
+    }
+    
+    @Transactional
+    public Usuario save(Usuario usuario) {
+        return usuarioRepository.save(usuario);
+    }
+    
+    private String generarCodigoReferido(Long usuarioId) {
+        // Generar código temporal primero, luego se actualizará con el ID real
+        String codigo = "REF-" + String.format("%06d", usuarioId != null ? usuarioId : 0) + "-" + 
+                       java.util.UUID.randomUUID().toString().substring(0, 6).toUpperCase();
+        return codigo;
     }
 }
 

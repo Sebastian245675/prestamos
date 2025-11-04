@@ -1,7 +1,8 @@
 import { useState, useEffect, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
-import axios from 'axios'
 import { toast } from 'react-toastify'
+import { useAuth } from '../context/AuthContext'
+import { prestamosService } from '../services/prestamosService'
 import { 
   ArrowLeft, 
   Upload, 
@@ -18,6 +19,7 @@ import { addMonths, addWeeks, addDays, format } from 'date-fns'
 
 export default function NuevoPrestamo() {
   const navigate = useNavigate()
+  const { user } = useAuth()
   const [loading, setLoading] = useState(false)
   const [formData, setFormData] = useState({
     nombreCliente: '',
@@ -243,53 +245,39 @@ export default function NuevoPrestamo() {
 
   const handleSubmit = async (e) => {
     e.preventDefault()
+    
+    if (!user?.id) {
+      toast.error('Debes iniciar sesión para crear un préstamo')
+      return
+    }
+
     setLoading(true)
 
     try {
-      const formDataToSend = new FormData()
+      const montoPrestado = parseFormattedNumber(formData.montoPrestadoFormatted || formData.montoPrestado)
       
-      // Agregar datos del formulario
-      formDataToSend.append('nombreCliente', formData.nombreCliente)
-      formDataToSend.append('numeroIdentificacion', formData.numeroIdentificacion)
-      formDataToSend.append('telefono', formData.telefono)
-      formDataToSend.append('email', formData.email || '')
-      formDataToSend.append('montoPrestado', parseFormattedNumber(formData.montoPrestadoFormatted || formData.montoPrestado))
-      formDataToSend.append('tipoInteres', formData.tipoInteres)
-      formDataToSend.append('interesPorcentaje', formData.interesPorcentaje)
-      formDataToSend.append('interesPorPeriodo', formData.interesPorPeriodo || '')
-      formDataToSend.append('numeroCuotas', parseInt(formData.numeroCuotas))
-      formDataToSend.append('frecuenciaPago', formData.frecuenciaPago)
-      formDataToSend.append('fechaInicio', formData.fechaInicio)
-      formDataToSend.append('fechaFinal', formData.fechaFinal)
-      formDataToSend.append('zona', formData.zona)
-      formDataToSend.append('observacion', formData.observacion || '')
-      formDataToSend.append('recordatoriosActivos', formData.recordatoriosActivos)
-
-      // Agregar imagen si existe
-      if (imagenCliente) {
-        formDataToSend.append('imagenCliente', imagenCliente)
+      const prestamoData = {
+        nombreCliente: formData.nombreCliente,
+        telefono: formData.telefono,
+        email: formData.email || null,
+        montoPrestado: montoPrestado,
+        numeroCuotas: parseInt(formData.numeroCuotas),
+        frecuenciaPago: formData.frecuenciaPago,
+        fechaInicio: formData.fechaInicio,
+        fechaVencimiento: formData.fechaFinal || calcularFechaFinal(formData.fechaInicio, formData.numeroCuotas, formData.frecuenciaPago),
+        zona: formData.zona,
+        recordatoriosActivos: formData.recordatoriosActivos,
+        valorCuota: calculos.valorCuota,
+        direccion: formData.observacion || ''
       }
 
-      // Agregar archivos
-      archivos.forEach((archivo, index) => {
-        formDataToSend.append(`archivos`, archivo)
-      })
-
-      try {
-        const response = await axios.post('/api/prestamos', formDataToSend, {
-          headers: {
-            'Content-Type': 'multipart/form-data'
-          }
-        })
-        toast.success('Préstamo creado exitosamente')
-        navigate('/prestamos')
-      } catch (error) {
-        // Modo demo: siempre exitoso
-        toast.success('Préstamo creado exitosamente')
-        navigate('/prestamos')
-      }
+      await prestamosService.createPrestamo(user.id, prestamoData)
+      
+      toast.success('Préstamo creado exitosamente')
+      navigate('/prestamos')
     } catch (error) {
-      toast.error(error.response?.data?.message || 'Error al crear el préstamo')
+      console.error('Error creating prestamo:', error)
+      toast.error(error.message || 'Error al crear el préstamo')
     } finally {
       setLoading(false)
     }

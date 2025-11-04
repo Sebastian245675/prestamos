@@ -10,7 +10,18 @@ import java.time.LocalDateTime;
 import java.util.List;
 
 @Entity
-@Table(name = "prestamos")
+@Table(name = "prestamos", indexes = {
+    @Index(name = "idx_prestamos_prestamista", columnList = "prestamista_id"),
+    @Index(name = "idx_prestamos_cobrador", columnList = "cobrador_id"),
+    @Index(name = "idx_prestamos_estado", columnList = "estado"),
+    @Index(name = "idx_prestamos_zona", columnList = "zona"),
+    @Index(name = "idx_prestamos_fecha_vencimiento", columnList = "fecha_vencimiento"),
+    @Index(name = "idx_prestamos_fecha_creacion", columnList = "fecha_creacion DESC"),
+    @Index(name = "idx_prestamos_prestamista_estado", columnList = "prestamista_id, estado"),
+    @Index(name = "idx_prestamos_prestamista_fecha_creacion", columnList = "prestamista_id, fecha_creacion DESC"),
+    @Index(name = "idx_prestamos_prestamista_estado_fecha", columnList = "prestamista_id, estado, fecha_creacion DESC"),
+    @Index(name = "idx_prestamos_zona_estado", columnList = "zona, estado")
+})
 @Data
 @NoArgsConstructor
 @AllArgsConstructor

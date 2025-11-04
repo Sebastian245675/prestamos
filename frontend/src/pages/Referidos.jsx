@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
-import axios from 'axios'
 import { toast } from 'react-toastify'
+import api from '../utils/api'
 import { 
   Gift, 
   Copy, 
@@ -111,10 +111,10 @@ export default function Referidos() {
 
       try {
         const [codigoRes, referidosRes, recompensasRes, statsRes] = await Promise.all([
-          axios.get('/api/referidos/codigo'),
-          axios.get('/api/referidos'),
-          axios.get('/api/referidos/recompensas'),
-          axios.get('/api/referidos/estadisticas')
+          api.get('/referidos/codigo'),
+          api.get('/referidos'),
+          api.get('/referidos/recompensas'),
+          api.get('/referidos/estadisticas')
         ])
         setCodigoReferido(codigoRes.data.codigo)
         setReferidos(referidosRes.data)

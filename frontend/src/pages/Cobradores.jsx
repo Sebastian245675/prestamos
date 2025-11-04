@@ -1,9 +1,11 @@
 import { useState, useEffect } from 'react'
-import axios from 'axios'
 import { toast } from 'react-toastify'
+import { useAuth } from '../context/AuthContext'
+import { usuariosService } from '../services/usuariosService'
 import { Plus, Edit, Trash2, UserPlus, Mail, Phone } from 'lucide-react'
 
 export default function Cobradores() {
+  const { user } = useAuth()
   const [cobradores, setCobradores] = useState([])
   const [loading, setLoading] = useState(true)
   const [showModal, setShowModal] = useState(false)
@@ -26,40 +28,22 @@ export default function Cobradores() {
   })
 
   useEffect(() => {
-    fetchCobradores()
-  }, [])
+    if (user) {
+      fetchCobradores()
+    }
+  }, [user])
 
   const fetchCobradores = async () => {
+    if (!user?.id) return
+    
     try {
-      const mockCobradores = [
-        {
-          id: 1,
-          nombreCompleto: 'Roberto Martínez',
-          email: 'roberto@prestacol.com',
-          telefono: '3001112233',
-          activo: true,
-          numeroPrestamos: 5,
-          permisos: {
-            verPrestamos: true,
-            registrarAbonos: true,
-            editarPrestamos: false,
-            eliminarPrestamos: false,
-            verReportes: false,
-            gestionarClientes: false,
-            verCalendario: true,
-            exportarDatos: false
-          }
-        }
-      ]
-      
-      try {
-        const response = await axios.get('/api/cobradores')
-        setCobradores(response.data)
-      } catch (e) {
-        setCobradores(mockCobradores)
-      }
+      setLoading(true)
+      const cobradoresData = await usuariosService.getCobradores(user.id)
+      setCobradores(cobradoresData)
     } catch (error) {
+      console.error('Error al cargar los cobradores:', error)
       toast.error('Error al cargar los cobradores')
+      setCobradores([])
     } finally {
       setLoading(false)
     }
@@ -68,16 +52,37 @@ export default function Cobradores() {
   const handleSubmit = async (e) => {
     e.preventDefault()
     
+    if (!user?.id) {
+      toast.error('Debes iniciar sesión para gestionar cobradores')
+      return
+    }
+    
     try {
       if (editingCobrador) {
-        await axios.put(`/api/cobradores/${editingCobrador.id}`, formData)
+        await usuariosService.updateCobrador(editingCobrador.id, {
+          email: formData.email,
+          nombreCompleto: formData.nombreCompleto,
+          telefono: formData.telefono,
+          password: formData.password || undefined
+        })
         toast.success('Cobrador actualizado exitosamente')
       } else {
         if (cobradores.length >= 2) {
           toast.error('Ya has alcanzado el límite de 2 cobradores')
           return
         }
-        await axios.post('/api/cobradores', formData)
+        
+        if (!formData.password || formData.password.length < 6) {
+          toast.error('La contraseña debe tener al menos 6 caracteres')
+          return
+        }
+        
+        await usuariosService.createCobrador(user.id, {
+          email: formData.email,
+          nombreCompleto: formData.nombreCompleto,
+          telefono: formData.telefono,
+          password: formData.password
+        })
         toast.success('Cobrador creado exitosamente')
       }
       
@@ -101,6 +106,7 @@ export default function Cobradores() {
       })
       fetchCobradores()
     } catch (error) {
+      console.error('Error al guardar cobrador:', error)
       toast.error(error.response?.data?.message || 'Error al guardar el cobrador')
     }
   }
@@ -132,10 +138,11 @@ export default function Cobradores() {
     }
 
     try {
-      await axios.delete(`/api/cobradores/${id}`)
-      toast.success('Cobrador eliminado exitosamente')
+      await usuariosService.desactivarCobrador(id)
+      toast.success('Cobrador desactivado exitosamente')
       fetchCobradores()
     } catch (error) {
+      console.error('Error al eliminar cobrador:', error)
       toast.error('Error al eliminar el cobrador')
     }
   }

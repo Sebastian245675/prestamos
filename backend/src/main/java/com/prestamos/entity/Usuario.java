@@ -9,7 +9,12 @@ import java.time.LocalDateTime;
 import java.util.List;
 
 @Entity
-@Table(name = "usuarios")
+@Table(name = "usuarios", indexes = {
+    @Index(name = "idx_usuarios_email", columnList = "email"),
+    @Index(name = "idx_usuarios_prestamista", columnList = "prestamista_id"),
+    @Index(name = "idx_usuarios_rol", columnList = "rol"),
+    @Index(name = "idx_usuarios_activo", columnList = "activo")
+})
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
@@ -45,6 +50,9 @@ public class Usuario {
     
     @Column(nullable = false)
     private Boolean suscripcionActiva = false;
+    
+    @Column(unique = true, length = 50)
+    private String codigoReferido; // Código único de referido del usuario
     
     @ManyToOne
     @JoinColumn(name = "prestamista_id")

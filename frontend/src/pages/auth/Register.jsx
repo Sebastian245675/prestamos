@@ -75,7 +75,8 @@ export default function Register() {
       email: formData.email,
       telefono: formData.telefono,
       password: formData.password,
-      tipoSuscripcion: formData.tipoSuscripcion
+      tipoSuscripcion: formData.tipoSuscripcion,
+      codigoReferido: formData.codigoReferido || null
     })
     
     if (result.success) {

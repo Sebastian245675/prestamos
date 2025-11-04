@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react'
-import axios from 'axios'
 import { toast } from 'react-toastify'
+import { useAuth } from '../context/AuthContext'
+import { prestamosService } from '../services/prestamosService'
+import api from '../utils/api'
 import Calendar from 'react-calendar'
 import { format, addDays, isToday, isPast, differenceInDays } from 'date-fns'
 import { 
@@ -22,6 +24,7 @@ import {
 import 'react-calendar/dist/Calendar.css'
 
 export default function Calendario() {
+  const { user } = useAuth()
   const [selectedDate, setSelectedDate] = useState(new Date())
   const [cobros, setCobros] = useState([])
   const [proximosCobros, setProximosCobros] = useState([])
@@ -41,172 +44,128 @@ export default function Calendario() {
   })
 
   useEffect(() => {
-    fetchCobros()
-    fetchProximosCobros()
-    fetchEventos()
-    fetchZonas()
-  }, [selectedDate, filterZona])
+    if (user) {
+      fetchCobros()
+      fetchProximosCobros()
+      fetchEventos()
+      fetchZonas()
+    }
+  }, [selectedDate, filterZona, user])
 
   const fetchCobros = async () => {
+    if (!user?.id) return
+    
     try {
-      const mockCobros = [
-        {
-          id: 1,
-          nombreCliente: 'Juan Pérez',
-          zona: 'Zona Norte',
-          fechaVencimiento: format(selectedDate, 'yyyy-MM-dd'),
-          saldoPendiente: 500000,
-          estado: 'ACTIVO',
-          montoCuota: 83333,
-          prestamoId: 123,
-          telefono: '3001234567'
-        },
-        {
-          id: 2,
-          nombreCliente: 'María García',
-          zona: 'Zona Sur',
-          fechaVencimiento: format(selectedDate, 'yyyy-MM-dd'),
-          saldoPendiente: 300000,
-          estado: 'VENCIDO',
-          montoCuota: 50000,
-          prestamoId: 456,
-          telefono: '3009876543'
-        }
-      ]
-      
-      try {
-        const response = await axios.get('/api/prestamos/calendario', {
-          params: {
-            fecha: format(selectedDate, 'yyyy-MM-dd'),
-            zona: filterZona !== 'TODAS' ? filterZona : null
-          }
-        })
-        setCobros(response.data)
-      } catch (e) {
-        setCobros(mockCobros)
+      setLoading(true)
+      const params = {
+        fecha: format(selectedDate, 'yyyy-MM-dd')
       }
+      if (filterZona !== 'TODAS') {
+        params.zona = filterZona
+      }
+      
+      const response = await api.get('/prestamos/calendario', { params })
+      
+      const cobrosData = response.data.map(cobro => ({
+        id: cobro.id || cobro.prestamoId,
+        prestamoId: cobro.prestamoId,
+        nombreCliente: cobro.nombreCliente,
+        zona: cobro.zona,
+        telefono: cobro.telefono,
+        fechaVencimiento: cobro.fechaVencimiento || format(selectedDate, 'yyyy-MM-dd'),
+        saldoPendiente: parseFloat(cobro.saldoPendiente) || 0,
+        estado: cobro.estado,
+        montoCuota: parseFloat(cobro.montoCuota) || 0
+      }))
+      
+      setCobros(cobrosData)
     } catch (error) {
+      console.error('Error al cargar los cobros:', error)
       toast.error('Error al cargar los cobros')
+      setCobros([])
     } finally {
       setLoading(false)
     }
   }
 
   const fetchProximosCobros = async () => {
+    if (!user?.id) return
+    
     try {
       const hoy = new Date()
       const proximos7Dias = addDays(hoy, 7)
       
-      const mockProximos = [
-        {
-          id: 3,
-          nombreCliente: 'Pedro López',
-          zona: 'Zona Centro',
-          fechaVencimiento: format(addDays(hoy, 1), 'yyyy-MM-dd'),
-          saldoPendiente: 400000,
-          estado: 'ACTIVO',
-          montoCuota: 100000,
-          prestamoId: 789,
-          telefono: '3001112222'
-        },
-        {
-          id: 4,
-          nombreCliente: 'Ana Martínez',
-          zona: 'Zona Este',
-          fechaVencimiento: format(addDays(hoy, 2), 'yyyy-MM-dd'),
-          saldoPendiente: 250000,
-          estado: 'ACTIVO',
-          montoCuota: 62500,
-          prestamoId: 101,
-          telefono: '3002223333'
-        },
-        {
-          id: 5,
-          nombreCliente: 'Carlos Rodríguez',
-          zona: 'Zona Norte',
-          fechaVencimiento: format(addDays(hoy, 3), 'yyyy-MM-dd'),
-          saldoPendiente: 600000,
-          estado: 'ACTIVO',
-          montoCuota: 150000,
-          prestamoId: 202,
-          telefono: '3003334444'
-        },
-        {
-          id: 6,
-          nombreCliente: 'Laura Sánchez',
-          zona: 'Zona Oeste',
-          fechaVencimiento: format(addDays(hoy, 5), 'yyyy-MM-dd'),
-          saldoPendiente: 350000,
-          estado: 'ACTIVO',
-          montoCuota: 87500,
-          prestamoId: 303,
-          telefono: '3004445555'
-        }
-      ]
+      // Obtener todos los préstamos activos
+      const prestamos = await prestamosService.getPrestamos(user.id, { estado: 'ACTIVO' })
       
-      try {
-        const response = await axios.get('/api/prestamos/proximos-cobros', {
-          params: { dias: 7, zona: filterZona !== 'TODAS' ? filterZona : null }
-        })
-        setProximosCobros(response.data)
-      } catch (e) {
-        setProximosCobros(mockProximos)
+      // Obtener cuotas de los próximos 7 días
+      const proximosCobrosList = []
+      
+      for (const prestamo of prestamos) {
+        try {
+          const cuotas = await prestamosService.getCuotas(prestamo.id)
+          
+          const cuotasProximas = cuotas.filter(cuota => {
+            const fechaCuota = new Date(cuota.fechaVencimiento)
+            return fechaCuota >= hoy && fechaCuota <= proximos7Dias && 
+                   cuota.estado === 'PENDIENTE'
+          })
+          
+          cuotasProximas.forEach(cuota => {
+            proximosCobrosList.push({
+              id: cuota.id,
+              prestamoId: prestamo.id,
+              nombreCliente: prestamo.nombreCliente,
+              zona: prestamo.zona,
+              telefono: prestamo.telefono,
+              fechaVencimiento: cuota.fechaVencimiento,
+              montoCuota: cuota.monto,
+              estado: prestamo.estado,
+              saldoPendiente: prestamo.saldoPendiente
+            })
+          })
+        } catch (error) {
+          console.error(`Error al obtener cuotas del préstamo ${prestamo.id}:`, error)
+        }
       }
+      
+      // Ordenar por fecha
+      proximosCobrosList.sort((a, b) => 
+        new Date(a.fechaVencimiento) - new Date(b.fechaVencimiento)
+      )
+      
+      setProximosCobros(proximosCobrosList.slice(0, 10))
     } catch (error) {
-      console.error('Error al cargar próximos cobros')
+      console.error('Error al cargar próximos cobros:', error)
+      setProximosCobros([])
     }
   }
 
   const fetchEventos = async () => {
+    // Los eventos se mantienen como funcionalidad local (no hay backend aún)
+    // Se pueden guardar en localStorage para persistencia
     try {
-      const mockEventos = [
-        {
-          id: 1,
-          titulo: 'Reunión con equipo',
-          descripcion: 'Revisión de cobros semanales',
-          fecha: format(addDays(new Date(), 2), 'yyyy-MM-dd'),
-          hora: '10:00',
-          tipo: 'EVENTO',
-          color: 'blue'
-        },
-        {
-          id: 2,
-          titulo: 'Recordatorio: Revisar morosos',
-          descripcion: 'Llamar a clientes con atrasos',
-          fecha: format(addDays(new Date(), 4), 'yyyy-MM-dd'),
-          hora: '14:00',
-          tipo: 'RECORDATORIO',
-          color: 'orange'
-        }
-      ]
-      
-      try {
-        const response = await axios.get('/api/eventos', {
-          params: { 
-            fechaInicio: format(new Date(), 'yyyy-MM-dd'),
-            fechaFin: format(addDays(new Date(), 30), 'yyyy-MM-dd')
-          }
-        })
-        setEventos(response.data)
-      } catch (e) {
-        setEventos(mockEventos)
+      const eventosGuardados = localStorage.getItem('calendario_eventos')
+      if (eventosGuardados) {
+        setEventos(JSON.parse(eventosGuardados))
+      } else {
+        setEventos([])
       }
     } catch (error) {
-      console.error('Error al cargar eventos')
+      console.error('Error al cargar eventos:', error)
+      setEventos([])
     }
   }
 
   const fetchZonas = async () => {
+    if (!user?.id) return
+    
     try {
-      const mockZonas = ['Zona Norte', 'Zona Sur', 'Zona Centro', 'Zona Este', 'Zona Oeste']
-      try {
-        const response = await axios.get('/api/prestamos/zonas')
-        setZonas(response.data)
-      } catch (e) {
-        setZonas(mockZonas)
-      }
+      const response = await api.get('/prestamos/zonas')
+      setZonas(response.data || [])
     } catch (error) {
-      console.error('Error al cargar zonas')
+      console.error('Error al cargar zonas:', error)
+      setZonas([])
     }
   }
 
@@ -220,10 +179,21 @@ export default function Calendario() {
     return eventos.filter(evento => format(new Date(evento.fecha), 'yyyy-MM-dd') === fechaStr)
   }
 
-  const handleCrearEvento = async (e) => {
+  const handleCrearEvento = (e) => {
     e.preventDefault()
+    
     try {
-      await axios.post('/api/eventos', eventoForm)
+      const nuevoEvento = {
+        id: Date.now(),
+        ...eventoForm
+      }
+      
+      const eventosActualizados = [...eventos, nuevoEvento]
+      setEventos(eventosActualizados)
+      
+      // Guardar en localStorage
+      localStorage.setItem('calendario_eventos', JSON.stringify(eventosActualizados))
+      
       toast.success('Evento creado exitosamente')
       setShowEventoModal(false)
       setEventoForm({
@@ -234,32 +204,25 @@ export default function Calendario() {
         tipo: 'EVENTO',
         color: 'blue'
       })
-      fetchEventos()
     } catch (error) {
-      // Demo mode
-      toast.success('Evento creado exitosamente')
-      setShowEventoModal(false)
-      setEventos([...eventos, { id: Date.now(), ...eventoForm }])
-      setEventoForm({
-        titulo: '',
-        descripcion: '',
-        fecha: format(new Date(), 'yyyy-MM-dd'),
-        hora: '',
-        tipo: 'EVENTO',
-        color: 'blue'
-      })
+      console.error('Error al crear evento:', error)
+      toast.error('Error al crear el evento')
     }
   }
 
-  const handleEliminarEvento = async (id) => {
+  const handleEliminarEvento = (id) => {
     if (window.confirm('¿Estás seguro de eliminar este evento?')) {
       try {
-        await axios.delete(`/api/eventos/${id}`)
+        const eventosActualizados = eventos.filter(e => e.id !== id)
+        setEventos(eventosActualizados)
+        
+        // Guardar en localStorage
+        localStorage.setItem('calendario_eventos', JSON.stringify(eventosActualizados))
+        
         toast.success('Evento eliminado')
-        setEventos(eventos.filter(e => e.id !== id))
       } catch (error) {
-        toast.success('Evento eliminado')
-        setEventos(eventos.filter(e => e.id !== id))
+        console.error('Error al eliminar evento:', error)
+        toast.error('Error al eliminar el evento')
       }
     }
   }

@@ -9,7 +9,14 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 
 @Entity
-@Table(name = "cuotas")
+@Table(name = "cuotas", indexes = {
+    @Index(name = "idx_cuotas_prestamo", columnList = "prestamo_id"),
+    @Index(name = "idx_cuotas_fecha_vencimiento", columnList = "fecha_vencimiento"),
+    @Index(name = "idx_cuotas_estado", columnList = "estado"),
+    @Index(name = "idx_cuotas_prestamo_numero", columnList = "prestamo_id, numero_cuota"),
+    @Index(name = "idx_cuotas_prestamo_estado", columnList = "prestamo_id, estado"),
+    @Index(name = "idx_cuotas_fecha_vencimiento_estado", columnList = "fecha_vencimiento, estado")
+})
 @Data
 @NoArgsConstructor
 @AllArgsConstructor

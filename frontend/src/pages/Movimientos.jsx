@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
-import axios from 'axios'
 import { toast } from 'react-toastify'
+import { useAuth } from '../context/AuthContext'
+import { movimientosService } from '../services/movimientosService'
 import { 
   Plus, 
   TrendingUp, 
@@ -26,6 +27,7 @@ import {
 } from 'lucide-react'
 
 export default function Movimientos() {
+  const { user } = useAuth()
   const [movimientos, setMovimientos] = useState([])
   const [resumen, setResumen] = useState({
     totalEntradas: 0,
@@ -54,151 +56,123 @@ export default function Movimientos() {
   })
 
   useEffect(() => {
-    fetchMovimientos()
-    fetchResumen()
-  }, [fechaInicio, fechaFin, filterTipo])
+    if (user) {
+      fetchMovimientos()
+      fetchResumen()
+    }
+  }, [fechaInicio, fechaFin, filterTipo, user])
 
   const fetchMovimientos = async () => {
+    if (!user?.id) return
+    
     try {
-      const mockMovimientos = [
-        {
-          id: 1,
-          tipo: 'ENTRADA',
-          monto: 500000,
-          descripcion: 'Abono de préstamo #123',
-          fecha: '2024-03-15',
-          observaciones: 'Pagos de clientes',
-          fechaCreacion: '2024-03-15T10:00:00',
-          usuario: { nombre: 'María González', rol: 'PRESTAMISTA' },
-          cliente: { nombre: 'Juan Pérez', id: 1 },
-          prestamo: { id: 123, numero: 'PST-123' },
-          metodo: 'EFECTIVO',
-          categoria: 'COBRO_PRESTAMO',
-          hora: '10:30'
-        },
-        {
-          id: 2,
-          tipo: 'SALIDA',
-          monto: 150000,
-          descripcion: 'Pago de servicios públicos',
-          fecha: '2024-03-14',
-          observaciones: 'Luz y agua',
-          fechaCreacion: '2024-03-14T09:00:00',
-          usuario: { nombre: 'María González', rol: 'PRESTAMISTA' },
-          metodo: 'TRANSFERENCIA',
-          categoria: 'GASTO_OPERATIVO',
-          proveedor: 'Empresa de Servicios',
-          hora: '09:15'
-        },
-        {
-          id: 3,
-          tipo: 'ENTRADA',
-          monto: 300000,
-          descripcion: 'Intereses cobrados',
-          fecha: '2024-03-13',
-          observaciones: 'Intereses cobrados',
-          fechaCreacion: '2024-03-13T14:00:00',
-          usuario: { nombre: 'María González', rol: 'PRESTAMISTA' },
-          metodo: 'EFECTIVO',
-          categoria: 'INTERESES',
-          hora: '14:00'
-        },
-        {
-          id: 4,
-          tipo: 'SALIDA',
-          monto: 80000,
-          descripcion: 'Gasto en transporte',
-          fecha: '2024-03-12',
-          observaciones: 'Combustible y peajes',
-          fechaCreacion: '2024-03-12T11:00:00',
-          usuario: { nombre: 'Carlos Rodríguez', rol: 'COBRADOR' },
-          metodo: 'EFECTIVO',
-          categoria: 'GASTO_TRANSPORTE',
-          hora: '11:30'
-        },
-        {
-          id: 5,
-          tipo: 'ENTRADA',
-          monto: 200000,
-          descripcion: 'Abono de préstamo #456',
-          fecha: '2024-03-11',
-          observaciones: 'Pago parcial',
-          fechaCreacion: '2024-03-11T16:00:00',
-          usuario: { nombre: 'Ana Martínez', rol: 'COBRADOR' },
-          cliente: { nombre: 'Pedro López', id: 2 },
-          prestamo: { id: 456, numero: 'PST-456' },
-          metodo: 'EFECTIVO',
-          categoria: 'COBRO_PRESTAMO',
-          hora: '16:20'
-        },
-        {
-          id: 6,
-          tipo: 'SALIDA',
-          monto: 50000,
-          descripcion: 'Compra de materiales',
-          fecha: '2024-03-10',
-          observaciones: 'Papelería y útiles',
-          fechaCreacion: '2024-03-10T10:00:00',
-          usuario: { nombre: 'María González', rol: 'PRESTAMISTA' },
-          metodo: 'EFECTIVO',
-          categoria: 'GASTO_ADMINISTRATIVO',
-          hora: '10:00'
-        }
-      ]
-      
-      try {
-        const response = await axios.get('/api/movimientos', {
-          params: { fechaInicio, fechaFin }
-        })
-        setMovimientos(response.data)
-      } catch (e) {
-        setMovimientos(mockMovimientos)
+      setLoading(true)
+      const filters = {
+        tipo: filterTipo !== 'TODOS' ? filterTipo : undefined,
+        fechaDesde: fechaInicio,
+        fechaHasta: fechaFin
       }
+      
+      const movimientosData = await movimientosService.getMovimientos(user.id, filters)
+      setMovimientos(movimientosData)
     } catch (error) {
+      console.error('Error al cargar los movimientos:', error)
       toast.error('Error al cargar los movimientos')
+      setMovimientos([])
     } finally {
       setLoading(false)
     }
   }
 
   const fetchResumen = async () => {
+    if (!user?.id) return
+    
     try {
-      const mockResumen = {
-        totalEntradas: 1000000,
-        totalSalidas: 280000,
-        saldo: 720000
-      }
+      const resumenData = await movimientosService.getResumen(user.id)
       
-      try {
-        const response = await axios.get('/api/movimientos/resumen')
-        setResumen(response.data)
-      } catch (e) {
-        setResumen(mockResumen)
+      // Calcular resumen desde los movimientos si no viene del backend
+      if (resumenData.totalEntradas === undefined) {
+        const totalEntradas = movimientos
+          .filter(m => m.tipo === 'ENTRADA')
+          .reduce((sum, m) => sum + m.monto, 0)
+        const totalSalidas = movimientos
+          .filter(m => m.tipo === 'SALIDA')
+          .reduce((sum, m) => sum + m.monto, 0)
+        
+        setResumen({
+          totalEntradas,
+          totalSalidas,
+          saldo: totalEntradas - totalSalidas
+        })
+      } else {
+        setResumen(resumenData)
       }
     } catch (error) {
-      console.error('Error al cargar resumen')
+      console.error('Error al cargar resumen:', error)
+      // Calcular desde movimientos locales
+      const totalEntradas = movimientos
+        .filter(m => m.tipo === 'ENTRADA')
+        .reduce((sum, m) => sum + m.monto, 0)
+      const totalSalidas = movimientos
+        .filter(m => m.tipo === 'SALIDA')
+        .reduce((sum, m) => sum + m.monto, 0)
+      
+      setResumen({
+        totalEntradas,
+        totalSalidas,
+        saldo: totalEntradas - totalSalidas
+      })
     }
   }
 
   const handleSubmit = async (e) => {
     e.preventDefault()
-    toast.success('Movimiento registrado exitosamente (modo visual)')
-    setShowModal(false)
-    setFormData({
-      tipo: 'ENTRADA',
-      monto: '',
-      descripcion: '',
-      fecha: new Date().toISOString().split('T')[0],
-      hora: new Date().toTimeString().slice(0, 5),
-      metodo: 'EFECTIVO',
-      categoria: '',
-      observaciones: '',
-      clienteId: '',
-      prestamoId: '',
-      proveedor: ''
-    })
-    fetchMovimientos()
-    fetchResumen()
+    
+    if (!user?.id) {
+      toast.error('Debes iniciar sesión para registrar un movimiento')
+      return
+    }
+    
+    try {
+      const monto = parseFloat(formData.monto)
+      if (isNaN(monto) || monto <= 0) {
+        toast.error('El monto debe ser mayor a cero')
+        return
+      }
+      
+      await movimientosService.createMovimiento(user.id, {
+        tipo: formData.tipo,
+        monto: monto,
+        descripcion: formData.descripcion,
+        fecha: formData.fecha,
+        observaciones: formData.observaciones || null
+      })
+      
+      toast.success('Movimiento registrado exitosamente')
+      setShowModal(false)
+      setFormData({
+        tipo: 'ENTRADA',
+        monto: '',
+        descripcion: '',
+        fecha: new Date().toISOString().split('T')[0],
+        hora: new Date().toTimeString().slice(0, 5),
+        metodo: 'EFECTIVO',
+        categoria: '',
+        observaciones: '',
+        clienteId: '',
+        prestamoId: '',
+        proveedor: ''
+      })
+      
+      // Recargar movimientos y resumen
+      await Promise.all([
+        fetchMovimientos(),
+        fetchResumen()
+      ])
+    } catch (error) {
+      console.error('Error al registrar movimiento:', error)
+      toast.error(error.response?.data?.message || 'Error al registrar el movimiento')
+    }
   }
 
   const categoriasEntrada = [
@@ -217,10 +191,23 @@ export default function Movimientos() {
     { value: 'GASTO_OTRO', label: 'Otro Gasto' }
   ]
 
-  const handleDelete = (id) => {
-    if (window.confirm('¿Estás seguro de eliminar este movimiento?')) {
-      toast.success('Movimiento eliminado (modo visual)')
-      setMovimientos(movimientos.filter(m => m.id !== id))
+  const handleDelete = async (id) => {
+    if (!window.confirm('¿Estás seguro de eliminar este movimiento?')) {
+      return
+    }
+    
+    try {
+      await movimientosService.deleteMovimiento(id)
+      toast.success('Movimiento eliminado exitosamente')
+      
+      // Recargar movimientos y resumen
+      await Promise.all([
+        fetchMovimientos(),
+        fetchResumen()
+      ])
+    } catch (error) {
+      console.error('Error al eliminar movimiento:', error)
+      toast.error('Error al eliminar el movimiento')
     }
   }
 

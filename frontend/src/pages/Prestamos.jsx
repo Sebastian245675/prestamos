@@ -1,10 +1,13 @@
 import { useState, useEffect } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
-import axios from 'axios'
 import { toast } from 'react-toastify'
 import { Plus, Search, Filter, DollarSign, Calendar, MapPin, X } from 'lucide-react'
+import { useAuth } from '../context/AuthContext'
+import { prestamosService } from '../services/prestamosService'
+import api from '../utils/api'
 
 export default function Prestamos() {
+  const { user } = useAuth()
   const [prestamos, setPrestamos] = useState([])
   const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState('')
@@ -21,57 +24,24 @@ export default function Prestamos() {
     if (estadoParam) {
       setFilterEstado(estadoParam)
     }
-    fetchPrestamos()
-  }, [searchParams])
+    if (user) {
+      fetchPrestamos()
+    }
+  }, [searchParams, user])
 
   const fetchPrestamos = async () => {
+    if (!user?.id) return
+    
     try {
-      const mockPrestamos = [
-        {
-          id: 1,
-          nombreCliente: 'Juan Pérez',
-          telefono: '3001234567',
-          montoPrestado: 1000000,
-          saldoPendiente: 500000,
-          numeroCuotas: 12,
-          cuotasPagadas: 6,
-          fechaVencimiento: '2024-12-01',
-          zona: 'Zona Norte',
-          estado: 'ACTIVO'
-        },
-        {
-          id: 2,
-          nombreCliente: 'María García',
-          telefono: '3002345678',
-          montoPrestado: 2000000,
-          saldoPendiente: 1500000,
-          numeroCuotas: 24,
-          cuotasPagadas: 6,
-          fechaVencimiento: '2024-11-15',
-          zona: 'Zona Sur',
-          estado: 'VENCIDO'
-        },
-        {
-          id: 3,
-          nombreCliente: 'Carlos López',
-          telefono: '3003456789',
-          montoPrestado: 500000,
-          saldoPendiente: 0,
-          numeroCuotas: 6,
-          cuotasPagadas: 6,
-          fechaVencimiento: '2024-09-30',
-          zona: 'Zona Centro',
-          estado: 'FINALIZADO'
-        }
-      ]
-      
-      try {
-        const response = await axios.get('/api/prestamos')
-        setPrestamos(response.data)
-      } catch (e) {
-        setPrestamos(mockPrestamos)
+      setLoading(true)
+      const filters = {
+        estado: filterEstado,
+        search: searchTerm
       }
+      const data = await prestamosService.getPrestamos(user.id, filters)
+      setPrestamos(data)
     } catch (error) {
+      console.error('Error fetching prestamos:', error)
       toast.error('Error al cargar los préstamos')
     } finally {
       setLoading(false)
@@ -97,14 +67,17 @@ export default function Prestamos() {
     }
 
     try {
-      // TODO: Llamar al backend cuando esté listo
-      // await axios.post('/api/rutas', rutaForm)
+      await api.post('/rutas', {
+        nombre: rutaForm.nombre.trim(),
+        color: rutaForm.color
+      })
       
       toast.success(`Ruta "${rutaForm.nombre}" creada exitosamente`)
       setShowRutaModal(false)
       setRutaForm({ nombre: '', color: '#3B82F6' })
     } catch (error) {
-      toast.error('Error al crear la ruta')
+      console.error('Error al crear ruta:', error)
+      toast.error(error.response?.data?.message || 'Error al crear la ruta')
     }
   }
 

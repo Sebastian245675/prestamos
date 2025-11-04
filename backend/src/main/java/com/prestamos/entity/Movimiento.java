@@ -9,7 +9,14 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 
 @Entity
-@Table(name = "movimientos")
+@Table(name = "movimientos", indexes = {
+    @Index(name = "idx_movimientos_usuario", columnList = "usuario_id"),
+    @Index(name = "idx_movimientos_fecha", columnList = "fecha DESC"),
+    @Index(name = "idx_movimientos_tipo", columnList = "tipo"),
+    @Index(name = "idx_movimientos_fecha_creacion", columnList = "fecha_creacion DESC"),
+    @Index(name = "idx_movimientos_usuario_fecha", columnList = "usuario_id, fecha DESC"),
+    @Index(name = "idx_movimientos_usuario_tipo_fecha", columnList = "usuario_id, tipo, fecha DESC")
+})
 @Data
 @NoArgsConstructor
 @AllArgsConstructor

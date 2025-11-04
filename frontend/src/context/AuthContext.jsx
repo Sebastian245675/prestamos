@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, useEffect } from 'react'
-import axios from 'axios'
+import api from '../utils/api'
+import { toast } from 'react-toastify'
 
 const AuthContext = createContext()
 
@@ -16,97 +17,139 @@ export const AuthProvider = ({ children }) => {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    const token = localStorage.getItem('token')
-    if (token) {
-      // Verificar token y obtener usuario
-      axios.defaults.headers.common['Authorization'] = `Bearer ${token}`
-      // Aquí podrías hacer una llamada para obtener el usuario
-      // Por ahora, simplemente establecemos que hay un token
-    }
-    setLoading(false)
+    // Verificar sesión activa desde localStorage
+    checkSession()
   }, [])
+
+  const checkSession = async () => {
+    try {
+      const token = localStorage.getItem('token')
+      const storedUser = localStorage.getItem('user')
+      
+      if (token && storedUser) {
+        try {
+          const userData = JSON.parse(storedUser)
+          setUser(userData)
+          
+          // Verificar si el token sigue siendo válido
+          // El backend validará el token automáticamente en cada petición
+        } catch (e) {
+          localStorage.removeItem('token')
+          localStorage.removeItem('user')
+        }
+      }
+    } catch (error) {
+      console.error('Error checking session:', error)
+      localStorage.removeItem('token')
+      localStorage.removeItem('user')
+    } finally {
+      setLoading(false)
+    }
+  }
 
   const login = async (email, password) => {
     try {
-      // Modo desarrollo: acepta cualquier credencial
-      // En producción, esto debe conectarse al backend
-      const mockUser = {
-        id: 1,
-        email: email || 'admin@prestacol.com',
-        nombreCompleto: email ? email.split('@')[0] : 'Usuario Demo',
-        telefono: '3001234567',
-        rol: 'PRESTAMISTA',
-        suscripcionActiva: true
+      const response = await api.post('/auth/login', {
+        email,
+        password,
+      })
+
+      if (response.data && response.data.token) {
+        const { token, user: userData } = response.data
+        
+        // Guardar token y usuario
+        localStorage.setItem('token', token)
+        localStorage.setItem('user', JSON.stringify({
+          id: userData.id,
+          email: userData.email,
+          nombreCompleto: userData.nombreCompleto,
+          telefono: userData.telefono,
+          rol: userData.rol,
+          suscripcionActiva: userData.suscripcionActiva
+        }))
+        
+        setUser({
+          id: userData.id,
+          email: userData.email,
+          nombreCompleto: userData.nombreCompleto,
+          telefono: userData.telefono,
+          rol: userData.rol,
+          suscripcionActiva: userData.suscripcionActiva
+        })
+        
+        return { success: true }
       }
-      const mockToken = 'dev-token-' + Date.now()
-      
-      localStorage.setItem('token', mockToken)
-      axios.defaults.headers.common['Authorization'] = `Bearer ${mockToken}`
-      setUser(mockUser)
-      
-      // También intentar el backend real por si está disponible
-      try {
-        const response = await axios.post('/api/auth/login', { email, password })
-        if (response.data.token) {
-          localStorage.setItem('token', response.data.token)
-          axios.defaults.headers.common['Authorization'] = `Bearer ${response.data.token}`
-          setUser(response.data.user)
-        }
-      } catch (e) {
-        // Si el backend no está disponible, usar mock
-      }
-      
-      return { success: true }
+
+      return { success: false, error: 'Error al iniciar sesión' }
     } catch (error) {
-      return { success: false, error: error.response?.data?.message || 'Error al iniciar sesión' }
+      const message = error.response?.data?.message || error.message || 'Error al iniciar sesión'
+      return { success: false, error: message }
     }
   }
 
   const register = async (userData) => {
     try {
-      // Modo desarrollo: acepta cualquier registro
-      const mockUser = {
-        id: Date.now(),
-        email: userData.email || 'nuevo@prestacol.com',
-        nombreCompleto: userData.nombreCompleto || 'Nuevo Usuario',
-        telefono: userData.telefono || '3001234567',
-        rol: 'PRESTAMISTA',
-        suscripcionActiva: true
+      const response = await api.post('/auth/register', {
+        email: userData.email,
+        password: userData.password,
+        nombreCompleto: userData.nombreCompleto,
+        telefono: userData.telefono,
+        tipoSuscripcion: userData.tipoSuscripcion || 'MENSUAL',
+        codigoReferido: userData.codigoReferido || null
+      })
+
+      if (response.data && response.data.token) {
+        const { token, user: registeredUser } = response.data
+        
+        // Guardar token y usuario
+        localStorage.setItem('token', token)
+        localStorage.setItem('user', JSON.stringify({
+          id: registeredUser.id,
+          email: registeredUser.email,
+          nombreCompleto: registeredUser.nombreCompleto,
+          telefono: registeredUser.telefono,
+          rol: registeredUser.rol,
+          suscripcionActiva: registeredUser.suscripcionActiva
+        }))
+        
+        setUser({
+          id: registeredUser.id,
+          email: registeredUser.email,
+          nombreCompleto: registeredUser.nombreCompleto,
+          telefono: registeredUser.telefono,
+          rol: registeredUser.rol,
+          suscripcionActiva: registeredUser.suscripcionActiva
+        })
+        
+        return { success: true }
       }
-      const mockToken = 'dev-token-' + Date.now()
-      
-      localStorage.setItem('token', mockToken)
-      axios.defaults.headers.common['Authorization'] = `Bearer ${mockToken}`
-      setUser(mockUser)
-      
-      // También intentar el backend real por si está disponible
-      try {
-        const response = await axios.post('/api/auth/register', userData)
-        if (response.data.token) {
-          localStorage.setItem('token', response.data.token)
-          axios.defaults.headers.common['Authorization'] = `Bearer ${response.data.token}`
-          setUser(response.data.user)
-        }
-      } catch (e) {
-        // Si el backend no está disponible, usar mock
-      }
-      
-      return { success: true }
+
+      return { success: false, error: 'Error al registrarse' }
     } catch (error) {
-      return { success: false, error: error.response?.data?.message || 'Error al registrarse' }
+      const message = error.response?.data?.message || error.message || 'Error al registrarse'
+      return { success: false, error: message }
     }
   }
 
-  const logout = () => {
-    localStorage.removeItem('token')
-    delete axios.defaults.headers.common['Authorization']
-    setUser(null)
+  const logout = async () => {
+    try {
+      localStorage.removeItem('token')
+      localStorage.removeItem('user')
+      setUser(null)
+      return { success: true }
+    } catch (error) {
+      return { success: false, error: error.message }
+    }
   }
 
-  return (
-    <AuthContext.Provider value={{ user, login, register, logout, loading }}>
-      {children}
-    </AuthContext.Provider>
-  )
+  const value = {
+    user,
+    loading,
+    login,
+    register,
+    logout,
+  }
+
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
 }
 

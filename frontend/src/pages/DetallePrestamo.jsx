@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
-import axios from 'axios'
 import { toast } from 'react-toastify'
+import { useAuth } from '../context/AuthContext'
+import { prestamosService } from '../services/prestamosService'
 import { 
   ArrowLeft, 
   DollarSign, 
@@ -29,6 +30,7 @@ import { format, addDays, differenceInDays } from 'date-fns'
 export default function DetallePrestamo() {
   const { id } = useParams()
   const navigate = useNavigate()
+  const { user } = useAuth()
   const [prestamo, setPrestamo] = useState(null)
   const [abonos, setAbonos] = useState([])
   const [cuotas, setCuotas] = useState([])
@@ -49,48 +51,18 @@ export default function DetallePrestamo() {
 
   const fetchPrestamo = async () => {
     try {
-      // Mock data si el backend no está disponible
-      const mockPrestamo = {
-        id: parseInt(id),
-        nombreCliente: 'Jessica Arrieta',
-        numeroIdentificacion: '10876628272',
-        direccion: 'Calle 123 #45-67',
-        telefono: '3218769092',
-        email: 'jessica.arrieta@email.com',
-        montoPrestado: 500000,
-        saldoPendiente: 600000,
-        numeroCuotas: 30,
-        cuotasPagadas: 0,
-        frecuenciaPago: 'DIARIO',
-        frecuenciaPagoTexto: 'Diario (Lunes a Domingo)',
-        fechaInicio: '2025-11-03',
-        fechaVencimiento: '2025-12-03',
-        fechaFinal: '2025-12-03',
-        zona: 'Sin ruta',
-        ruta: null,
-        estado: 'ACTIVO',
-        interesPorcentaje: 20,
-        valorCuota: 20000,
-        totalPagar: 600000,
-        montoPagado: 0,
-        observacion: 'Sin observación',
-        imagenCliente: null,
-        tipoInteres: 'SIMPLE_GLOBAL',
-        proximoPago: '2025-11-04',
-        atrasoManual: 0
-      }
+      setLoading(true)
+      const prestamoData = await prestamosService.getPrestamoById(id)
+      setPrestamo(prestamoData)
       
-      try {
-        const response = await axios.get(`/api/prestamos/${id}`)
-        setPrestamo(response.data)
-      } catch (e) {
-        setPrestamo(mockPrestamo)
-      }
-      
-      fetchAbonos()
-      fetchCuotas()
+      await Promise.all([
+        fetchAbonos(),
+        fetchCuotas()
+      ])
     } catch (error) {
+      console.error('Error al cargar el préstamo:', error)
       toast.error('Error al cargar el préstamo')
+      navigate('/prestamos')
     } finally {
       setLoading(false)
     }
@@ -98,54 +70,51 @@ export default function DetallePrestamo() {
 
   const fetchAbonos = async () => {
     try {
-      const mockAbonos = [
-        { id: 1, monto: 100000, fechaAbono: '2024-02-01', observaciones: 'Primer pago' },
-        { id: 2, monto: 100000, fechaAbono: '2024-03-01', observaciones: 'Segundo pago' },
-      ]
-      
-      try {
-        const response = await axios.get(`/api/prestamos/${id}/abonos`)
-        setAbonos(response.data)
-      } catch (e) {
-        setAbonos(mockAbonos)
-      }
+      const abonosData = await prestamosService.getAbonos(id)
+      setAbonos(abonosData)
     } catch (error) {
-      console.error('Error al cargar abonos')
+      console.error('Error al cargar abonos:', error)
+      setAbonos([])
     }
   }
 
   const fetchCuotas = async () => {
     try {
-      const mockCuotas = Array.from({ length: 12 }, (_, i) => ({
-        id: i + 1,
-        numeroCuota: i + 1,
-        monto: 83333.33,
-        fechaVencimiento: `2024-${String(i + 1).padStart(2, '0')}-01`,
-        estado: i < 6 ? 'PAGADA' : 'PENDIENTE',
-        fechaPago: i < 6 ? `2024-${String(i + 1).padStart(2, '0')}-01` : null
-      }))
-      
-      try {
-        const response = await axios.get(`/api/prestamos/${id}/cuotas`)
-        setCuotas(response.data)
-      } catch (e) {
-        setCuotas(mockCuotas)
-      }
+      const cuotasData = await prestamosService.getCuotas(id)
+      setCuotas(cuotasData)
     } catch (error) {
-      console.error('Error al cargar cuotas')
+      console.error('Error al cargar cuotas:', error)
+      setCuotas([])
     }
   }
 
   const handleRegistrarAbono = async (e) => {
     e.preventDefault()
     
+    if (!user?.id) {
+      toast.error('Debes iniciar sesión para registrar un abono')
+      return
+    }
+    
     try {
-      await axios.post(`/api/prestamos/${id}/abonos`, abonoForm)
+      const monto = parseFloat(abonoForm.monto)
+      if (isNaN(monto) || monto <= 0) {
+        toast.error('El monto debe ser mayor a cero')
+        return
+      }
+      
+      await prestamosService.registrarAbono(id, user.id, {
+        monto: monto,
+        fechaAbono: abonoForm.fechaAbono,
+        observaciones: abonoForm.observaciones || null
+      })
+      
       if (abonoForm.enviarComprobante && prestamo.email) {
         toast.success('Abono registrado y comprobante enviado al cliente')
       } else {
         toast.success('Abono registrado exitosamente')
       }
+      
       setShowAbonoModal(false)
       setAbonoForm({ 
         monto: '', 
@@ -154,22 +123,16 @@ export default function DetallePrestamo() {
         enviarComprobante: false,
         esSoloIntereses: false
       })
-      fetchPrestamo()
+      
+      // Recargar datos
+      await Promise.all([
+        fetchPrestamo(),
+        fetchAbonos(),
+        fetchCuotas()
+      ])
     } catch (error) {
-      if (abonoForm.enviarComprobante && prestamo.email) {
-        toast.success('Abono registrado y comprobante enviado al cliente')
-      } else {
-        toast.success('Abono registrado exitosamente')
-      }
-      setShowAbonoModal(false)
-      setAbonoForm({ 
-        monto: '', 
-        fechaAbono: new Date().toISOString().split('T')[0], 
-        observaciones: '',
-        enviarComprobante: false,
-        esSoloIntereses: false
-      })
-      fetchPrestamo()
+      console.error('Error al registrar abono:', error)
+      toast.error(error.response?.data?.message || 'Error al registrar el abono')
     }
   }
 
@@ -195,14 +158,9 @@ export default function DetallePrestamo() {
 
   const handleAtrasoManual = async (dias) => {
     setAtrasoManual(dias)
-    try {
-      await axios.put(`/api/prestamos/${id}/atraso`, { dias })
-      toast.success('Atraso manual actualizado')
-      setPrestamo({ ...prestamo, atrasoManual: dias })
-    } catch (error) {
-      toast.success('Atraso manual actualizado')
-      setPrestamo({ ...prestamo, atrasoManual: dias })
-    }
+    // TODO: Implementar endpoint en backend para actualizar atraso manual
+    toast.success('Atraso manual actualizado (funcionalidad pendiente)')
+    setPrestamo({ ...prestamo, atrasoManual: dias })
   }
 
   const calcularProximoPago = () => {

@@ -1,48 +1,38 @@
 import { useState, useEffect } from 'react'
-import axios from 'axios'
 import { toast } from 'react-toastify'
+import { useAuth } from '../context/AuthContext'
+import api from '../utils/api'
 import { Download, FileText, FileSpreadsheet, Calendar, TrendingUp } from 'lucide-react'
 import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts'
 
 export default function Reportes() {
+  const { user } = useAuth()
   const [reportes, setReportes] = useState(null)
   const [loading, setLoading] = useState(true)
   const [fechaInicio, setFechaInicio] = useState(new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0])
   const [fechaFin, setFechaFin] = useState(new Date().toISOString().split('T')[0])
 
   useEffect(() => {
-    fetchReportes()
-  }, [fechaInicio, fechaFin])
+    if (user) {
+      fetchReportes()
+    }
+  }, [fechaInicio, fechaFin, user])
 
   const fetchReportes = async () => {
+    if (!user?.id) return
+    
     try {
-      const mockReportes = {
-        totalPrestado: 5000000,
-        totalCobrado: 3000000,
-        totalPendiente: 2000000,
-        totalPerdido: 500000,
-        porZona: [
-          { zona: 'Zona Norte', prestado: 2000000, cobrado: 1200000 },
-          { zona: 'Zona Sur', prestado: 1500000, cobrado: 1000000 },
-          { zona: 'Zona Centro', prestado: 1500000, cobrado: 800000 }
-        ],
-        porPeriodo: [
-          { periodo: '2024-01', prestado: 1000000, cobrado: 800000 },
-          { periodo: '2024-02', prestado: 1500000, cobrado: 1200000 },
-          { periodo: '2024-03', prestado: 2000000, cobrado: 1000000 }
-        ]
-      }
+      setLoading(true)
+      const params = {}
+      if (fechaInicio) params.fechaInicio = fechaInicio
+      if (fechaFin) params.fechaFin = fechaFin
       
-      try {
-        const response = await axios.get('/api/reportes', {
-          params: { fechaInicio, fechaFin }
-        })
-        setReportes(response.data)
-      } catch (e) {
-        setReportes(mockReportes)
-      }
+      const response = await api.get('/reportes', { params })
+      setReportes(response.data)
     } catch (error) {
+      console.error('Error al cargar los reportes:', error)
       toast.error('Error al cargar los reportes')
+      setReportes(null)
     } finally {
       setLoading(false)
     }
@@ -50,18 +40,12 @@ export default function Reportes() {
 
   const exportarPDF = async () => {
     try {
-      const response = await axios.get('/api/reportes/exportar/pdf', {
-        params: { fechaInicio, fechaFin },
-        responseType: 'blob'
-      })
-      const url = window.URL.createObjectURL(new Blob([response.data]))
-      const link = document.createElement('a')
-      link.href = url
-      link.setAttribute('download', `reporte-${fechaInicio}-${fechaFin}.pdf`)
-      document.body.appendChild(link)
-      link.click()
-      link.remove()
-      toast.success('Reporte PDF descargado')
+      toast.info('La exportación a PDF estará disponible próximamente')
+      // TODO: Implementar cuando el backend tenga el endpoint
+      // const response = await api.get('/reportes/exportar/pdf', {
+      //   params: { fechaInicio, fechaFin },
+      //   responseType: 'blob'
+      // })
     } catch (error) {
       toast.error('Error al exportar PDF')
     }
@@ -69,18 +53,12 @@ export default function Reportes() {
 
   const exportarExcel = async () => {
     try {
-      const response = await axios.get('/api/reportes/exportar/excel', {
-        params: { fechaInicio, fechaFin },
-        responseType: 'blob'
-      })
-      const url = window.URL.createObjectURL(new Blob([response.data]))
-      const link = document.createElement('a')
-      link.href = url
-      link.setAttribute('download', `reporte-${fechaInicio}-${fechaFin}.xlsx`)
-      document.body.appendChild(link)
-      link.click()
-      link.remove()
-      toast.success('Reporte Excel descargado')
+      toast.info('La exportación a Excel estará disponible próximamente')
+      // TODO: Implementar cuando el backend tenga el endpoint
+      // const response = await api.get('/reportes/exportar/excel', {
+      //   params: { fechaInicio, fechaFin },
+      //   responseType: 'blob'
+      // })
     } catch (error) {
       toast.error('Error al exportar Excel')
     }

@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
-import axios from 'axios'
 import { toast } from 'react-toastify'
 import { Search, User, Phone, MapPin, DollarSign, FileText, Plus, Filter, List, Grid } from 'lucide-react'
+import api from '../utils/api'
 
 export default function Clientes() {
   const [clientes, setClientes] = useState([])
@@ -19,69 +19,28 @@ export default function Clientes() {
 
   const fetchClientes = async () => {
     try {
-      const mockClientes = [
-        {
-          id: 1,
-          nombre: 'Juan Pérez',
-          telefono: '3001234567',
-          direccion: 'Calle 123 #45-67',
-          zona: 'Zona Norte',
-          email: 'juan.perez@email.com',
-          totalPrestamos: 2,
-          prestamosActivos: 1,
-          totalPrestado: 3000000,
-          saldoPendiente: 1500000,
-          ultimaActividad: '2024-03-15'
-        },
-        {
-          id: 2,
-          nombre: 'María García',
-          telefono: '3002345678',
-          direccion: 'Carrera 45 #12-34',
-          zona: 'Zona Sur',
-          email: 'maria.garcia@email.com',
-          totalPrestamos: 1,
-          prestamosActivos: 1,
-          totalPrestado: 2000000,
-          saldoPendiente: 2000000,
-          ultimaActividad: '2024-03-14'
-        },
-        {
-          id: 3,
-          nombre: 'Carlos López',
-          telefono: '3003456789',
-          direccion: 'Avenida 56 #78-90',
-          zona: 'Zona Centro',
-          email: 'carlos.lopez@email.com',
-          totalPrestamos: 3,
-          prestamosActivos: 0,
-          totalPrestado: 5000000,
-          saldoPendiente: 0,
-          ultimaActividad: '2024-03-10'
-        },
-        {
-          id: 4,
-          nombre: 'Ana Martínez',
-          telefono: '3004567890',
-          direccion: 'Calle 78 #90-12',
-          zona: 'Zona Este',
-          email: 'ana.martinez@email.com',
-          totalPrestamos: 1,
-          prestamosActivos: 1,
-          totalPrestado: 1500000,
-          saldoPendiente: 800000,
-          ultimaActividad: '2024-03-13'
-        }
-      ]
-
-      try {
-        const response = await axios.get('/api/clientes')
-        setClientes(response.data)
-      } catch (e) {
-        setClientes(mockClientes)
-      }
+      setLoading(true)
+      const response = await api.get('/prestamos/clientes')
+      
+      const clientesData = response.data.map(cliente => ({
+        id: cliente.id,
+        nombre: cliente.nombre,
+        telefono: cliente.telefono,
+        direccion: cliente.direccion || '',
+        zona: cliente.zona || '',
+        email: cliente.email || '',
+        totalPrestamos: cliente.totalPrestamos || 0,
+        prestamosActivos: cliente.prestamosActivos || 0,
+        totalPrestado: parseFloat(cliente.totalPrestado) || 0,
+        saldoPendiente: parseFloat(cliente.saldoPendiente) || 0,
+        ultimaActividad: cliente.ultimaActividad || new Date().toISOString().split('T')[0]
+      }))
+      
+      setClientes(clientesData)
     } catch (error) {
+      console.error('Error al cargar los clientes:', error)
       toast.error('Error al cargar los clientes')
+      setClientes([])
     } finally {
       setLoading(false)
     }
@@ -89,15 +48,11 @@ export default function Clientes() {
 
   const fetchZonas = async () => {
     try {
-      const mockZonas = ['Zona Norte', 'Zona Sur', 'Zona Centro', 'Zona Este', 'Zona Oeste']
-      try {
-        const response = await axios.get('/api/prestamos/zonas')
-        setZonas(response.data)
-      } catch (e) {
-        setZonas(mockZonas)
-      }
+      const response = await api.get('/prestamos/zonas')
+      setZonas(response.data || [])
     } catch (error) {
-      console.error('Error al cargar zonas')
+      console.error('Error al cargar zonas:', error)
+      setZonas([])
     }
   }
 

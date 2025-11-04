@@ -1,6 +1,9 @@
 import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
-import axios from 'axios'
+import { useAuth } from '../context/AuthContext'
+import { prestamosService } from '../services/prestamosService'
+import { movimientosService } from '../services/movimientosService'
+import api from '../utils/api'
 import { 
   DollarSign, 
   TrendingUp, 
@@ -22,6 +25,7 @@ import {
 import { toast } from 'react-toastify'
 
 export default function Dashboard() {
+  const { user } = useAuth()
   const [stats, setStats] = useState({
     totalPrestado: 0,
     totalCobrado: 0,
@@ -40,47 +44,51 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    fetchDashboardData()
-    fetchUltimosMovimientos()
-    fetchResumenMovimientos()
-  }, [filtroPeriodo])
+    if (user) {
+      fetchDashboardData()
+      fetchUltimosMovimientos()
+      fetchResumenMovimientos()
+    }
+  }, [filtroPeriodo, user])
 
   const fetchDashboardData = async () => {
+    if (!user?.id) return
+    
     try {
-      const mockStats = {
-        totalPrestado: 5000000,
-        totalCobrado: 3000000,
-        totalPendiente: 2000000,
-        prestamosActivos: 8,
-        prestamosVencidos: 2,
-        prestamosFinalizados: 5
-      }
+      setLoading(true)
+      const response = await api.get('/prestamos/dashboard')
       
-      try {
-        const response = await axios.get('/api/prestamos/dashboard')
-        setStats(response.data)
-      } catch (e) {
-        setStats(mockStats)
-      }
+      setStats({
+        totalPrestado: parseFloat(response.data.totalPrestado) || 0,
+        totalCobrado: parseFloat(response.data.totalCobrado) || 0,
+        totalPendiente: parseFloat(response.data.totalPendiente) || 0,
+        prestamosActivos: response.data.prestamosActivos || 0,
+        prestamosVencidos: response.data.prestamosVencidos || 0,
+        prestamosFinalizados: response.data.prestamosFinalizados || 0
+      })
     } catch (error) {
-      const mockStats = {
-        totalPrestado: 5000000,
-        totalCobrado: 3000000,
-        totalPendiente: 2000000,
-        prestamosActivos: 8,
-        prestamosVencidos: 2,
-        prestamosFinalizados: 5
-      }
-      setStats(mockStats)
+      console.error('Error al cargar dashboard:', error)
+      // Mantener valores por defecto en caso de error
+      setStats({
+        totalPrestado: 0,
+        totalCobrado: 0,
+        totalPendiente: 0,
+        prestamosActivos: 0,
+        prestamosVencidos: 0,
+        prestamosFinalizados: 0
+      })
     } finally {
       setLoading(false)
     }
   }
 
   const fetchUltimosMovimientos = async () => {
+    if (!user?.id) return
+    
     try {
       const hoy = new Date()
-      const inicioSemana = new Date(hoy.setDate(hoy.getDate() - hoy.getDay()))
+      const inicioSemana = new Date(hoy)
+      inicioSemana.setDate(hoy.getDate() - hoy.getDay())
       const inicioMes = new Date(hoy.getFullYear(), hoy.getMonth(), 1)
       
       let fechaInicio = new Date()
@@ -93,111 +101,74 @@ export default function Dashboard() {
         fechaInicio = inicioMes
       }
       
-      const mockMovimientos = [
-        { 
-          id: 1, 
-          tipo: 'ENTRADA', 
-          monto: 500000, 
-          descripcion: 'Abono de préstamo #123', 
-          fecha: new Date().toISOString(),
-          usuario: { nombre: 'María González', rol: 'PRESTAMISTA', avatar: null },
-          cliente: { nombre: 'Juan Pérez', id: 1 },
-          prestamo: { id: 123, numero: 'PST-123' },
-          metodo: 'EFECTIVO',
-          categoria: 'COBRO_PRESTAMO',
-          hora: new Date().toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' })
-        },
-        { 
-          id: 2, 
-          tipo: 'ENTRADA', 
-          monto: 300000, 
-          descripcion: 'Abono de préstamo #456', 
-          fecha: new Date().toISOString(),
-          usuario: { nombre: 'Ana Martínez', rol: 'COBRADOR', avatar: null },
-          cliente: { nombre: 'Pedro López', id: 2 },
-          prestamo: { id: 456, numero: 'PST-456' },
-          metodo: 'EFECTIVO',
-          categoria: 'COBRO_PRESTAMO',
-          hora: new Date(Date.now() - 3600000).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' })
-        },
-        { 
-          id: 3, 
-          tipo: 'SALIDA', 
-          monto: 150000, 
-          descripcion: 'Pago de servicios públicos', 
-          fecha: new Date().toISOString(),
-          usuario: { nombre: 'María González', rol: 'PRESTAMISTA', avatar: null },
-          metodo: 'TRANSFERENCIA',
-          categoria: 'GASTO_OPERATIVO',
-          proveedor: 'Empresa de Servicios',
-          hora: new Date(Date.now() - 7200000).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' })
-        },
-        { 
-          id: 4, 
-          tipo: 'ENTRADA', 
-          monto: 200000, 
-          descripcion: 'Intereses cobrados', 
-          fecha: new Date(Date.now() - 86400000).toISOString(),
-          usuario: { nombre: 'María González', rol: 'PRESTAMISTA', avatar: null },
-          metodo: 'EFECTIVO',
-          categoria: 'INTERESES',
-          hora: '14:30'
-        },
-        { 
-          id: 5, 
-          tipo: 'SALIDA', 
-          monto: 80000, 
-          descripcion: 'Gasto en transporte', 
-          fecha: new Date(Date.now() - 172800000).toISOString(),
-          usuario: { nombre: 'Carlos Rodríguez', rol: 'COBRADOR', avatar: null },
-          metodo: 'EFECTIVO',
-          categoria: 'GASTO_TRANSPORTE',
-          hora: '11:15'
-        }
-      ]
+      const fechaFin = new Date()
+      fechaFin.setHours(23, 59, 59, 999)
       
-      try {
-        const response = await axios.get('/api/movimientos', {
-          params: { limit: 5, fechaInicio: fechaInicio.toISOString() }
-        })
-        setUltimosMovimientos(response.data.slice(0, 5))
-      } catch (e) {
-        const movimientosFiltrados = mockMovimientos.filter(m => {
-          const fechaMov = new Date(m.fecha)
-          if (filtroPeriodo === 'HOY') {
-            return fechaMov.toDateString() === new Date().toDateString()
-          } else if (filtroPeriodo === 'SEMANA') {
-            return fechaMov >= inicioSemana
-          } else if (filtroPeriodo === 'MES') {
-            return fechaMov >= inicioMes
-          }
-          return true
-        })
-        setUltimosMovimientos(movimientosFiltrados.slice(0, 5))
-      }
+      const movimientosData = await movimientosService.getMovimientos(user.id, {
+        fechaDesde: fechaInicio.toISOString().split('T')[0],
+        fechaHasta: fechaFin.toISOString().split('T')[0]
+      })
+      
+      // Tomar los últimos 5 movimientos
+      const ultimos = movimientosData.slice(0, 5)
+      setUltimosMovimientos(ultimos)
     } catch (error) {
-      console.error('Error al cargar últimos movimientos')
+      console.error('Error al cargar últimos movimientos:', error)
+      setUltimosMovimientos([])
     }
   }
 
   const fetchResumenMovimientos = async () => {
+    if (!user?.id) return
+    
     try {
-      const mockResumen = {
-        hoy: { entradas: 800000, salidas: 150000, neto: 650000 },
-        semana: { entradas: 2500000, salidas: 450000, neto: 2050000 },
-        mes: { entradas: 8500000, salidas: 1200000, neto: 7300000 }
+      const hoy = new Date()
+      const inicioSemana = new Date(hoy)
+      inicioSemana.setDate(hoy.getDate() - hoy.getDay())
+      const inicioMes = new Date(hoy.getFullYear(), hoy.getMonth(), 1)
+      
+      // Obtener movimientos para cada período
+      const [movimientosHoy, movimientosSemana, movimientosMes] = await Promise.all([
+        movimientosService.getMovimientos(user.id, {
+          fechaDesde: hoy.toISOString().split('T')[0],
+          fechaHasta: hoy.toISOString().split('T')[0]
+        }),
+        movimientosService.getMovimientos(user.id, {
+          fechaDesde: inicioSemana.toISOString().split('T')[0],
+          fechaHasta: hoy.toISOString().split('T')[0]
+        }),
+        movimientosService.getMovimientos(user.id, {
+          fechaDesde: inicioMes.toISOString().split('T')[0],
+          fechaHasta: hoy.toISOString().split('T')[0]
+        })
+      ])
+      
+      const calcularResumen = (movimientos) => {
+        const entradas = movimientos
+          .filter(m => m.tipo === 'ENTRADA')
+          .reduce((sum, m) => sum + m.monto, 0)
+        const salidas = movimientos
+          .filter(m => m.tipo === 'SALIDA')
+          .reduce((sum, m) => sum + m.monto, 0)
+        return {
+          entradas,
+          salidas,
+          neto: entradas - salidas
+        }
       }
       
-      try {
-        const response = await axios.get('/api/movimientos/resumen', {
-          params: { periodo: filtroPeriodo }
-        })
-        setResumenMovimientos(response.data)
-      } catch (e) {
-        setResumenMovimientos(mockResumen)
-      }
+      setResumenMovimientos({
+        hoy: calcularResumen(movimientosHoy),
+        semana: calcularResumen(movimientosSemana),
+        mes: calcularResumen(movimientosMes)
+      })
     } catch (error) {
-      console.error('Error al cargar resumen de movimientos')
+      console.error('Error al cargar resumen de movimientos:', error)
+      setResumenMovimientos({
+        hoy: { entradas: 0, salidas: 0, neto: 0 },
+        semana: { entradas: 0, salidas: 0, neto: 0 },
+        mes: { entradas: 0, salidas: 0, neto: 0 }
+      })
     }
   }
 
