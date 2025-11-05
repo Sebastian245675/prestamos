@@ -117,11 +117,11 @@ export default function Soporte() {
               </div>
               <div className="flex items-center space-x-3 text-sm text-gray-600">
                 <Phone size={18} className="text-primary-600" />
-                <span>+57 300 123 4567</span>
+                <span>+57 3186218792</span>
               </div>
               <div className="flex items-center space-x-3 text-sm text-gray-600">
                 <MessageSquare size={18} className="text-primary-600" />
-                <span>WhatsApp: +57 300 123 4567</span>
+                <span>WhatsApp: +57 3186218792</span>
               </div>
             </div>
             <div className="mt-4 pt-4 border-t border-gray-200">

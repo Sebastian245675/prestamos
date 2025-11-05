@@ -8,7 +8,7 @@ import java.util.List;
 import java.util.Map;
 
 @Data
-public class RegisterRequest {
+public class UpdateCobradorRequest {
     @NotBlank(message = "El nombre completo es requerido")
     private String nombreCompleto;
     
@@ -19,13 +19,9 @@ public class RegisterRequest {
     @NotBlank(message = "El teléfono es requerido")
     private String telefono;
     
-    @NotBlank(message = "La contraseña es requerida")
+    // Password es opcional al actualizar
     @Size(min = 6, message = "La contraseña debe tener al menos 6 caracteres")
     private String password;
-    
-    private String tipoSuscripcion = "MENSUAL";
-    
-    private String codigoReferido; // Código de referido opcional
     
     private Map<String, Boolean> permisos; // Permisos para cobradores
     

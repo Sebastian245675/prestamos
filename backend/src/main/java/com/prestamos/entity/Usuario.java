@@ -5,16 +5,22 @@ import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 @Entity
 @Table(name = "usuarios", indexes = {
     @Index(name = "idx_usuarios_email", columnList = "email"),
     @Index(name = "idx_usuarios_prestamista", columnList = "prestamista_id"),
     @Index(name = "idx_usuarios_rol", columnList = "rol"),
-    @Index(name = "idx_usuarios_activo", columnList = "activo")
+    @Index(name = "idx_usuarios_activo", columnList = "activo"),
+    @Index(name = "idx_usuarios_codigo_referido", columnList = "codigo_referido", unique = true)
 })
 @Data
 @NoArgsConstructor
@@ -63,11 +69,24 @@ public class Usuario {
     @JsonIgnore
     private List<Prestamo> prestamos;
     
+    @ManyToMany(fetch = FetchType.LAZY)
+    @JoinTable(
+        name = "cobrador_rutas",
+        joinColumns = @JoinColumn(name = "cobrador_id"),
+        inverseJoinColumns = @JoinColumn(name = "ruta_id")
+    )
+    @JsonIgnore
+    private List<Ruta> rutasAsignadas = new ArrayList<>();
+    
     @Column(nullable = false)
     private LocalDateTime fechaCreacion;
     
     @Column(nullable = false)
     private LocalDateTime fechaActualizacion;
+    
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(columnDefinition = "jsonb")
+    private Map<String, Boolean> permisos = new HashMap<>();
     
     @PrePersist
     protected void onCreate() {

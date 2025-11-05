@@ -13,7 +13,9 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDate;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -78,6 +80,95 @@ public class PrestamoService {
         log.info("Préstamo creado: ID {} para cliente {}", prestamo.getId(), request.getNombreCliente());
         
         return prestamo;
+    }
+    
+    // Método optimizado para obtener préstamos - ahora soporta cobradores con consultas eficientes en BD
+    @Transactional(readOnly = true)
+    public List<Prestamo> obtenerPrestamosPorUsuario(Usuario usuario, String estado, String search) {
+        // Recargar el usuario dentro de la transacción para asegurar que las relaciones estén disponibles
+        Usuario usuarioCompleto = usuarioRepository.findById(usuario.getId())
+            .orElseThrow(() -> new RuntimeException("Usuario no encontrado"));
+        
+        Long prestamistaId;
+        List<String> zonasPermitidas = null;
+        
+        // Determinar el prestamista y las zonas permitidas según el rol
+        if (usuarioCompleto.getRol() == Usuario.RolUsuario.PRESTAMISTA) {
+            prestamistaId = usuarioCompleto.getId();
+            // Prestamistas ven todos sus préstamos - usar consulta normal
+            return obtenerPrestamosPorPrestamista(prestamistaId, estado, search);
+        } else if (usuarioCompleto.getRol() == Usuario.RolUsuario.COBRADOR) {
+            // Obtener el prestamista del cobrador
+            if (usuarioCompleto.getPrestamista() == null) {
+                log.warn("Cobrador {} no tiene prestamista asignado", usuarioCompleto.getId());
+                return new ArrayList<>();
+            }
+            prestamistaId = usuarioCompleto.getPrestamista().getId();
+            
+            // Verificar si tiene acceso restringido por rutas
+            // Cargar rutas asignadas dentro de la transacción (forzar carga lazy)
+            if (usuarioCompleto.getRutasAsignadas() != null) {
+                usuarioCompleto.getRutasAsignadas().size(); // Esto fuerza la carga lazy
+                if (!usuarioCompleto.getRutasAsignadas().isEmpty()) {
+                    // Si tiene rutas asignadas, solo mostrar préstamos de esas rutas
+                    zonasPermitidas = usuarioCompleto.getRutasAsignadas().stream()
+                        .map(Ruta::getNombre)
+                        .collect(Collectors.toList());
+                }
+            }
+            // Si no tiene rutas asignadas, tipoAccesoPrestamos = "TODOS", mostrar todos
+            
+            // Usar consultas optimizadas directamente en BD según los filtros
+            if (zonasPermitidas != null && !zonasPermitidas.isEmpty()) {
+                // Filtrar por zonas usando consulta optimizada en BD
+                return obtenerPrestamosPorPrestamistaYZonas(prestamistaId, zonasPermitidas, estado, search);
+            } else {
+                // Sin restricción de zonas - mostrar todos los préstamos del prestamista
+                return obtenerPrestamosPorPrestamista(prestamistaId, estado, search);
+            }
+        } else {
+            // Cliente u otro rol - no tiene acceso
+            return new ArrayList<>();
+        }
+    }
+    
+    // Método optimizado para obtener préstamos filtrando por zonas directamente en BD
+    @Transactional(readOnly = true)
+    private List<Prestamo> obtenerPrestamosPorPrestamistaYZonas(
+            Long prestamistaId, List<String> zonas, String estado, String search) {
+        // Si hay búsqueda y estado
+        if (search != null && !search.trim().isEmpty() && estado != null && !estado.equals("TODOS")) {
+            try {
+                Prestamo.EstadoPrestamo estadoEnum = Prestamo.EstadoPrestamo.valueOf(estado);
+                return prestamoRepository.findByPrestamistaIdAndEstadoAndZonaInAndSearchTerm(
+                    prestamistaId, estadoEnum, zonas, search.trim()
+                );
+            } catch (IllegalArgumentException e) {
+                log.warn("Estado inválido: {}", estado);
+            }
+        }
+        
+        // Si solo hay búsqueda
+        if (search != null && !search.trim().isEmpty()) {
+            return prestamoRepository.findByPrestamistaIdAndZonaInAndSearchTerm(
+                prestamistaId, zonas, search.trim()
+            );
+        }
+        
+        // Si solo hay estado
+        if (estado != null && !estado.equals("TODOS")) {
+            try {
+                Prestamo.EstadoPrestamo estadoEnum = Prestamo.EstadoPrestamo.valueOf(estado);
+                return prestamoRepository.findByPrestamistaIdAndEstadoAndZonaIn(
+                    prestamistaId, estadoEnum, zonas
+                );
+            } catch (IllegalArgumentException e) {
+                log.warn("Estado inválido: {}", estado);
+            }
+        }
+        
+        // Sin filtros adicionales, solo por zonas
+        return prestamoRepository.findByPrestamistaIdAndZonaIn(prestamistaId, zonas);
     }
     
     // Método optimizado para obtener préstamos

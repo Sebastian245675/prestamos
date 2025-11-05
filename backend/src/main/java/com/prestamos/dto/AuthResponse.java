@@ -3,6 +3,7 @@ package com.prestamos.dto;
 import com.prestamos.entity.Usuario;
 import lombok.AllArgsConstructor;
 import lombok.Data;
+import java.util.Map;
 
 @Data
 @AllArgsConstructor
@@ -19,6 +20,7 @@ public class AuthResponse {
         private String telefono;
         private Usuario.RolUsuario rol;
         private Boolean suscripcionActiva;
+        private Map<String, Boolean> permisos;
         
         public static UserInfo fromUsuario(Usuario usuario) {
             return new UserInfo(
@@ -27,7 +29,8 @@ public class AuthResponse {
                 usuario.getNombreCompleto(),
                 usuario.getTelefono(),
                 usuario.getRol(),
-                usuario.getSuscripcionActiva()
+                usuario.getSuscripcionActiva(),
+                usuario.getPermisos()
             );
         }
     }

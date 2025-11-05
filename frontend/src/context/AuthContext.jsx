@@ -29,7 +29,12 @@ export const AuthProvider = ({ children }) => {
       if (token && storedUser) {
         try {
           const userData = JSON.parse(storedUser)
-          setUser(userData)
+          // Asegurar que permisos esté presente
+          const userToSet = {
+            ...userData,
+            permisos: userData.permisos || {}
+          }
+          setUser(userToSet)
           
           // Verificar si el token sigue siendo válido
           // El backend validará el token automáticamente en cada petición
@@ -59,23 +64,17 @@ export const AuthProvider = ({ children }) => {
         
         // Guardar token y usuario
         localStorage.setItem('token', token)
-        localStorage.setItem('user', JSON.stringify({
+        const userToStore = {
           id: userData.id,
           email: userData.email,
           nombreCompleto: userData.nombreCompleto,
           telefono: userData.telefono,
           rol: userData.rol,
-          suscripcionActiva: userData.suscripcionActiva
-        }))
-        
-        setUser({
-          id: userData.id,
-          email: userData.email,
-          nombreCompleto: userData.nombreCompleto,
-          telefono: userData.telefono,
-          rol: userData.rol,
-          suscripcionActiva: userData.suscripcionActiva
-        })
+          suscripcionActiva: userData.suscripcionActiva,
+          permisos: userData.permisos || {}
+        }
+        localStorage.setItem('user', JSON.stringify(userToStore))
+        setUser(userToStore)
         
         return { success: true }
       }
@@ -103,23 +102,17 @@ export const AuthProvider = ({ children }) => {
         
         // Guardar token y usuario
         localStorage.setItem('token', token)
-        localStorage.setItem('user', JSON.stringify({
+        const userToStore = {
           id: registeredUser.id,
           email: registeredUser.email,
           nombreCompleto: registeredUser.nombreCompleto,
           telefono: registeredUser.telefono,
           rol: registeredUser.rol,
-          suscripcionActiva: registeredUser.suscripcionActiva
-        }))
-        
-        setUser({
-          id: registeredUser.id,
-          email: registeredUser.email,
-          nombreCompleto: registeredUser.nombreCompleto,
-          telefono: registeredUser.telefono,
-          rol: registeredUser.rol,
-          suscripcionActiva: registeredUser.suscripcionActiva
-        })
+          suscripcionActiva: registeredUser.suscripcionActiva,
+          permisos: registeredUser.permisos || {}
+        }
+        localStorage.setItem('user', JSON.stringify(userToStore))
+        setUser(userToStore)
         
         return { success: true }
       }

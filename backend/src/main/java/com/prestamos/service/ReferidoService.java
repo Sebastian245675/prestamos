@@ -28,26 +28,74 @@ public class ReferidoService {
     
     /**
      * Genera un código único de referido para un usuario
+     * Usa el mismo método que UsuarioService para garantizar consistencia
      */
     public String generarCodigoReferido(Long usuarioId) {
-        String codigo = "REF-" + String.format("%06d", usuarioId) + "-" + 
-                       UUID.randomUUID().toString().substring(0, 6).toUpperCase();
-        return codigo;
+        // Delegar al método mejorado de UsuarioService
+        // Por ahora, usar el mismo algoritmo mejorado aquí
+        return generarCodigoReferidoMejorado(usuarioId);
+    }
+    
+    /**
+     * Genera un código único de referido mejorado con validación de unicidad
+     */
+    private String generarCodigoReferidoMejorado(Long usuarioId) {
+        int maxIntentos = 10;
+        int intento = 0;
+        
+        while (intento < maxIntentos) {
+            // Generar código único: REF-XXXXXX-YYYYYY
+            String codigoAleatorio = generarCodigoAleatorioSeguro();
+            String codigo = "REF-" + String.format("%06d", usuarioId) + "-" + codigoAleatorio;
+            
+            // Verificar unicidad en la base de datos
+            Optional<Usuario> usuarioExistente = usuarioRepository.findByCodigoReferido(codigo);
+            if (usuarioExistente.isEmpty()) {
+                return codigo;
+            }
+            
+            intento++;
+            log.warn("Colisión detectada en código de referido {}, intento {}", codigo, intento);
+        }
+        
+        // Fallback con UUID completo
+        String codigoFallback = "REF-" + String.format("%06d", usuarioId) + "-" + 
+                                UUID.randomUUID().toString().replace("-", "").substring(0, 8).toUpperCase();
+        log.warn("Usando código de fallback para usuario {}: {}", usuarioId, codigoFallback);
+        return codigoFallback;
+    }
+    
+    /**
+     * Genera un código aleatorio seguro de 8 caracteres alfanuméricos
+     */
+    private String generarCodigoAleatorioSeguro() {
+        String caracteresSeguros = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
+        java.security.SecureRandom random = new java.security.SecureRandom();
+        StringBuilder codigo = new StringBuilder(8);
+        
+        for (int i = 0; i < 8; i++) {
+            int indice = random.nextInt(caracteresSeguros.length());
+            codigo.append(caracteresSeguros.charAt(indice));
+        }
+        
+        return codigo.toString();
     }
     
     /**
      * Obtiene o crea el código de referido de un usuario
+     * Garantiza que cada usuario tenga un código único
      */
-    @Transactional(readOnly = true)
+    @Transactional
     public String obtenerCodigoReferido(Long usuarioId) {
         Usuario usuario = usuarioRepository.findById(usuarioId)
             .orElseThrow(() -> new RuntimeException("Usuario no encontrado"));
         
         if (usuario.getCodigoReferido() == null || usuario.getCodigoReferido().isEmpty()) {
-            // Generar código si no existe
-            String codigo = generarCodigoReferido(usuarioId);
+            // Generar código único con validación de colisiones
+            String codigo = generarCodigoReferidoMejorado(usuarioId);
             usuario.setCodigoReferido(codigo);
             usuarioRepository.save(usuario);
+            log.info("Código de referido generado para usuario {}: {}", usuarioId, codigo);
             return codigo;
         }
         

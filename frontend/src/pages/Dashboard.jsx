@@ -36,6 +36,8 @@ export default function Dashboard() {
     prestamosFinalizados: 0
   })
   const [ultimosPrestamos, setUltimosPrestamos] = useState([])
+  const [ultimosMovimientos, setUltimosMovimientos] = useState([])
+  const [actividadReciente, setActividadReciente] = useState([])
   const [resumenMovimientos, setResumenMovimientos] = useState({
     hoy: { entradas: 0, salidas: 0, neto: 0 },
     semana: { entradas: 0, salidas: 0, neto: 0 },
@@ -44,13 +46,76 @@ export default function Dashboard() {
   const [filtroPeriodo, setFiltroPeriodo] = useState('HOY')
   const [loading, setLoading] = useState(true)
 
+  // Función helper para parsear fechas desde el backend (puede venir como LocalDateTime array o string)
+  const parseFecha = (fecha) => {
+    if (!fecha) return null
+    
+    try {
+      // Si es un array (formato LocalDateTime de Java: [year, month, day, hour, minute, second])
+      if (Array.isArray(fecha)) {
+        const [year, month, day, hour = 0, minute = 0, second = 0] = fecha
+        return new Date(year, month - 1, day, hour, minute, second)
+      }
+      
+      // Si es un string ISO
+      if (typeof fecha === 'string') {
+        return new Date(fecha)
+      }
+      
+      return null
+    } catch (e) {
+      console.error('Error parsing fecha:', fecha, e)
+      return null
+    }
+  }
+
   useEffect(() => {
     if (user) {
       fetchDashboardData()
       fetchUltimosPrestamos()
+      fetchUltimosMovimientos()
       fetchResumenMovimientos()
     }
   }, [user])
+
+  useEffect(() => {
+    // Combinar préstamos y movimientos en actividad reciente ordenados por fecha
+    const combinarActividad = () => {
+      const actividad = []
+      
+      // Agregar préstamos con tipo
+      ultimosPrestamos.forEach(prestamo => {
+        const fecha = parseFecha(prestamo.fechaCreacion)
+        if (fecha) {
+          actividad.push({
+            tipo: 'PRESTAMO',
+            id: prestamo.id,
+            fecha: fecha,
+            data: prestamo
+          })
+        }
+      })
+      
+      // Agregar movimientos con tipo
+      ultimosMovimientos.forEach(movimiento => {
+        const fecha = movimiento.fecha ? new Date(movimiento.fecha) : new Date()
+        if (fecha && !isNaN(fecha.getTime())) {
+          actividad.push({
+            tipo: 'MOVIMIENTO',
+            id: movimiento.id,
+            fecha: fecha,
+            data: movimiento
+          })
+        }
+      })
+      
+      // Ordenar por fecha descendente (más reciente primero) y tomar los últimos 4
+      actividad.sort((a, b) => b.fecha - a.fecha)
+      setActividadReciente(actividad.slice(0, 4))
+    }
+    
+    combinarActividad()
+  }, [ultimosPrestamos, ultimosMovimientos])
   
   useEffect(() => {
     if (user) {
@@ -95,12 +160,27 @@ export default function Dashboard() {
     try {
       const prestamosData = await prestamosService.getPrestamos(user.id)
       
-      // Tomar los últimos 5 préstamos ordenados por fecha de creación
+      // Tomar los últimos 5 préstamos (suficientes para combinar con movimientos y mostrar 4)
       const ultimos = prestamosData.slice(0, 5)
       setUltimosPrestamos(ultimos)
     } catch (error) {
       console.error('Error al cargar últimos préstamos:', error)
       setUltimosPrestamos([])
+    }
+  }
+
+  const fetchUltimosMovimientos = async () => {
+    if (!user?.id) return
+    
+    try {
+      const movimientosData = await movimientosService.getMovimientos(user.id)
+      
+      // Tomar los últimos 5 movimientos (suficientes para combinar con préstamos y mostrar 4)
+      const ultimos = movimientosData.slice(0, 5)
+      setUltimosMovimientos(ultimos)
+    } catch (error) {
+      console.error('Error al cargar últimos movimientos:', error)
+      setUltimosMovimientos([])
     }
   }
 
@@ -132,10 +212,10 @@ export default function Dashboard() {
       const calcularResumen = (movimientos) => {
         const entradas = movimientos
           .filter(m => m.tipo === 'ENTRADA')
-          .reduce((sum, m) => sum + m.monto, 0)
+          .reduce((sum, m) => sum + (Number(m.monto) || 0), 0)
         const salidas = movimientos
           .filter(m => m.tipo === 'SALIDA')
-          .reduce((sum, m) => sum + m.monto, 0)
+          .reduce((sum, m) => sum + (Number(m.monto) || 0), 0)
         return {
           entradas,
           salidas,
@@ -164,29 +244,6 @@ export default function Dashboard() {
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600"></div>
       </div>
     )
-  }
-
-  // Función helper para parsear fechas desde el backend (puede venir como LocalDateTime array o string)
-  const parseFecha = (fecha) => {
-    if (!fecha) return null
-    
-    try {
-      // Si es un array (formato LocalDateTime de Java: [year, month, day, hour, minute, second])
-      if (Array.isArray(fecha)) {
-        const [year, month, day, hour = 0, minute = 0, second = 0] = fecha
-        return new Date(year, month - 1, day, hour, minute, second)
-      }
-      
-      // Si es un string ISO
-      if (typeof fecha === 'string') {
-        return new Date(fecha)
-      }
-      
-      return null
-    } catch (e) {
-      console.error('Error parsing fecha:', fecha, e)
-      return null
-    }
   }
 
   // Las ganancias se calculan solo con lo realmente cobrado (capital + intereses) - capital prestado
@@ -350,7 +407,7 @@ export default function Dashboard() {
               <span className="text-xs text-gray-600 font-medium">Entradas</span>
             </div>
             <p className="text-2xl font-bold text-gray-900 mb-1">
-              ${resumenMovimientos[filtroPeriodo.toLowerCase()]?.entradas?.toLocaleString('es-CO') || 0}
+              ${(resumenMovimientos[filtroPeriodo.toLowerCase()]?.entradas || 0).toLocaleString('es-CO', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
             </p>
             <div className="flex items-center space-x-1 text-xs">
               <span className="text-green-600">↑</span>
@@ -366,7 +423,7 @@ export default function Dashboard() {
               <span className="text-xs text-gray-600 font-medium">Salidas</span>
             </div>
             <p className="text-2xl font-bold text-gray-900 mb-1">
-              ${resumenMovimientos[filtroPeriodo.toLowerCase()]?.salidas?.toLocaleString('es-CO') || 0}
+              ${(resumenMovimientos[filtroPeriodo.toLowerCase()]?.salidas || 0).toLocaleString('es-CO', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
             </p>
             <div className="flex items-center space-x-1 text-xs">
               <span className="text-gray-600">Control de gastos</span>
@@ -383,7 +440,7 @@ export default function Dashboard() {
             <p className={`text-2xl font-bold mb-1 ${
               resumenMovimientos[filtroPeriodo.toLowerCase()]?.neto >= 0 ? 'text-green-700' : 'text-red-700'
             }`}>
-              ${resumenMovimientos[filtroPeriodo.toLowerCase()]?.neto?.toLocaleString('es-CO') || 0}
+              ${(resumenMovimientos[filtroPeriodo.toLowerCase()]?.neto || 0).toLocaleString('es-CO', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
             </p>
             <div className="flex items-center space-x-1 text-xs">
               <span className={resumenMovimientos[filtroPeriodo.toLowerCase()]?.neto >= 0 ? 'text-green-600' : 'text-red-600'}>
@@ -426,26 +483,37 @@ export default function Dashboard() {
               <Clock className="text-primary-600" size={20} />
               <h3 className="text-lg font-semibold text-gray-900">Actividad Reciente</h3>
             </div>
-            <Link to="/prestamos" className="text-sm text-primary-600 hover:text-primary-700 font-medium">
-              Ver completo →
-            </Link>
+            <div className="flex items-center space-x-3">
+              <Link to="/movimientos" className="text-sm text-primary-600 hover:text-primary-700 font-medium">
+                Movimientos →
+              </Link>
+              <Link to="/prestamos" className="text-sm text-primary-600 hover:text-primary-700 font-medium">
+                Préstamos →
+              </Link>
+            </div>
           </div>
           
           <div className="space-y-3">
-            {ultimosPrestamos.length === 0 ? (
+            {actividadReciente.length === 0 ? (
               <div className="text-center py-12">
-                <CreditCard className="mx-auto text-gray-300 mb-3" size={48} />
-                <p className="text-gray-500 text-lg mb-2">No hay préstamos registrados</p>
-                <Link to="/prestamos/nuevo" className="text-primary-600 hover:text-primary-700 font-medium text-sm">
-                  Crear primer préstamo
-                </Link>
+                <Activity className="mx-auto text-gray-300 mb-3" size={48} />
+                <p className="text-gray-500 text-lg mb-2">No hay actividad reciente</p>
+                <div className="flex items-center justify-center space-x-4 mt-4">
+                  <Link to="/prestamos/nuevo" className="text-primary-600 hover:text-primary-700 font-medium text-sm">
+                    Crear préstamo
+                  </Link>
+                  <span className="text-gray-300">|</span>
+                  <Link to="/movimientos" className="text-primary-600 hover:text-primary-700 font-medium text-sm">
+                    Crear movimiento
+                  </Link>
+                </div>
               </div>
             ) : (
               <div className="relative">
                 {/* Línea vertical del timeline */}
                 <div className="absolute left-6 top-0 bottom-0 w-0.5 bg-gray-200"></div>
                 
-                {ultimosPrestamos.map((prestamo, index) => {
+                {actividadReciente.map((item, index) => {
                   const getEstadoColor = (estado) => {
                     switch (estado) {
                       case 'ACTIVO':
@@ -471,92 +539,162 @@ export default function Dashboard() {
                         return 'bg-blue-50 border-blue-200'
                     }
                   }
-                  
-                  return (
-                    <Link 
-                      key={prestamo.id} 
-                      to={`/prestamos/${prestamo.id}`}
-                      className="relative flex items-start space-x-4 pb-4 last:pb-0 block hover:opacity-80 transition-opacity"
-                    >
-                      {/* Punto del timeline */}
-                      <div className={`relative z-10 w-12 h-12 rounded-full flex items-center justify-center flex-shrink-0 border-4 border-white ${getEstadoColor(prestamo.estado)}`}>
-                        <CreditCard className="text-white" size={16} />
-                      </div>
 
-                      {/* Contenido del préstamo */}
-                      <div className={`flex-1 rounded-lg border-2 p-4 hover:shadow-md transition-all ${getEstadoBg(prestamo.estado)}`}>
-                        <div className="flex items-start justify-between">
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center space-x-2 mb-2">
-                              <p className="font-semibold text-gray-900">{prestamo.nombreCliente}</p>
-                              <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${
-                                prestamo.estado === 'ACTIVO'
-                                  ? 'bg-green-200 text-green-800'
-                                  : prestamo.estado === 'VENCIDO'
-                                  ? 'bg-red-200 text-red-800'
-                                  : 'bg-gray-200 text-gray-800'
-                              }`}>
-                                {prestamo.estado}
-                              </span>
-                            </div>
+                  if (item.tipo === 'PRESTAMO') {
+                    const prestamo = item.data
+                    
+                    return (
+                      <Link 
+                        key={`prestamo-${prestamo.id}`} 
+                        to={`/prestamos/${prestamo.id}`}
+                        className="relative flex items-start space-x-4 pb-4 last:pb-0 block hover:opacity-80 transition-opacity"
+                      >
+                        {/* Punto del timeline */}
+                        <div className={`relative z-10 w-12 h-12 rounded-full flex items-center justify-center flex-shrink-0 border-4 border-white ${getEstadoColor(prestamo.estado)}`}>
+                          <CreditCard className="text-white" size={16} />
+                        </div>
 
-                            {/* Información secundaria */}
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-2 mb-2">
-                              {prestamo.telefono && (
-                                <div className="flex items-center space-x-1.5 text-xs text-gray-600">
-                                  <UserCircle size={14} className="text-gray-400" />
-                                  <span>{prestamo.telefono}</span>
-                                </div>
-                              )}
-                              
-                              {prestamo.zona && (
-                                <div className="flex items-center space-x-1.5 text-xs text-gray-600">
-                                  <MapPin size={14} className="text-gray-400" />
-                                  <span>{prestamo.zona}</span>
-                                </div>
-                              )}
-                              
-                              <div className="flex items-center space-x-1.5 text-xs text-gray-500">
-                                <Calendar size={14} className="text-gray-400" />
-                                <span>
-                                  {(() => {
-                                    const fecha = parseFecha(prestamo.fechaCreacion)
-                                    if (!fecha || isNaN(fecha.getTime())) {
-                                      return 'Sin fecha'
-                                    }
-                                    return fecha.toLocaleDateString('es-CO', {
+                        {/* Contenido del préstamo */}
+                        <div className={`flex-1 rounded-lg border-2 p-4 hover:shadow-md transition-all ${getEstadoBg(prestamo.estado)}`}>
+                          <div className="flex items-start justify-between">
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center space-x-2 mb-2">
+                                <p className="font-semibold text-gray-900">{prestamo.nombreCliente}</p>
+                                <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${
+                                  prestamo.estado === 'ACTIVO'
+                                    ? 'bg-green-200 text-green-800'
+                                    : prestamo.estado === 'VENCIDO'
+                                    ? 'bg-red-200 text-red-800'
+                                    : 'bg-gray-200 text-gray-800'
+                                }`}>
+                                  {prestamo.estado}
+                                </span>
+                              </div>
+
+                              {/* Información secundaria */}
+                              <div className="grid grid-cols-1 md:grid-cols-2 gap-2 mb-2">
+                                {prestamo.telefono && (
+                                  <div className="flex items-center space-x-1.5 text-xs text-gray-600">
+                                    <UserCircle size={14} className="text-gray-400" />
+                                    <span>{prestamo.telefono}</span>
+                                  </div>
+                                )}
+                                
+                                {prestamo.zona && (
+                                  <div className="flex items-center space-x-1.5 text-xs text-gray-600">
+                                    <MapPin size={14} className="text-gray-400" />
+                                    <span>{prestamo.zona}</span>
+                                  </div>
+                                )}
+                                
+                                <div className="flex items-center space-x-1.5 text-xs text-gray-500">
+                                  <Calendar size={14} className="text-gray-400" />
+                                  <span>
+                                    {item.fecha.toLocaleDateString('es-CO', {
                                       day: '2-digit',
                                       month: 'short',
                                       year: 'numeric'
-                                    })
-                                  })()}
-                                </span>
-                              </div>
-                              
-                              {prestamo.numeroCuotas && (
-                                <div className="flex items-center space-x-1.5 text-xs text-gray-600">
-                                  <CreditCard size={14} className="text-gray-400" />
-                                  <span>{prestamo.cuotasPagadas || 0}/{prestamo.numeroCuotas} cuotas</span>
+                                    })}
+                                  </span>
                                 </div>
+                                
+                                {prestamo.numeroCuotas && (
+                                  <div className="flex items-center space-x-1.5 text-xs text-gray-600">
+                                    <CreditCard size={14} className="text-gray-400" />
+                                    <span>{prestamo.cuotasPagadas || 0}/{prestamo.numeroCuotas} cuotas</span>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+
+                            {/* Monto */}
+                            <div className="text-right ml-4 flex-shrink-0">
+                              <p className="text-2xl font-bold text-gray-900 mb-1">
+                                ${typeof prestamo.montoPrestado === 'number' ? prestamo.montoPrestado.toLocaleString('es-CO') : parseFloat(prestamo.montoPrestado || 0).toLocaleString('es-CO')}
+                              </p>
+                              {prestamo.saldoPendiente !== undefined && (
+                                <p className="text-sm text-gray-600">
+                                  Pendiente: ${typeof prestamo.saldoPendiente === 'number' ? prestamo.saldoPendiente.toLocaleString('es-CO') : parseFloat(prestamo.saldoPendiente || 0).toLocaleString('es-CO')}
+                                </p>
                               )}
                             </div>
                           </div>
+                        </div>
+                      </Link>
+                    )
+                  } else if (item.tipo === 'MOVIMIENTO') {
+                    const movimiento = item.data
+                    
+                    return (
+                      <Link 
+                        key={`movimiento-${movimiento.id}`} 
+                        to="/movimientos"
+                        className="relative flex items-start space-x-4 pb-4 last:pb-0 block hover:opacity-80 transition-opacity"
+                      >
+                        {/* Punto del timeline */}
+                        <div className={`relative z-10 w-12 h-12 rounded-full flex items-center justify-center flex-shrink-0 border-4 border-white ${
+                          movimiento.tipo === 'ENTRADA' ? 'bg-green-500' : 'bg-red-500'
+                        }`}>
+                          {movimiento.tipo === 'ENTRADA' ? (
+                            <TrendingUp className="text-white" size={16} />
+                          ) : (
+                            <TrendingDown className="text-white" size={16} />
+                          )}
+                        </div>
 
-                          {/* Monto */}
-                          <div className="text-right ml-4 flex-shrink-0">
-                            <p className="text-2xl font-bold text-gray-900 mb-1">
-                              ${typeof prestamo.montoPrestado === 'number' ? prestamo.montoPrestado.toLocaleString('es-CO') : parseFloat(prestamo.montoPrestado || 0).toLocaleString('es-CO')}
-                            </p>
-                            {prestamo.saldoPendiente !== undefined && (
-                              <p className="text-sm text-gray-600">
-                                Pendiente: ${typeof prestamo.saldoPendiente === 'number' ? prestamo.saldoPendiente.toLocaleString('es-CO') : parseFloat(prestamo.saldoPendiente || 0).toLocaleString('es-CO')}
+                        {/* Contenido del movimiento */}
+                        <div className={`flex-1 rounded-lg border-2 p-4 hover:shadow-md transition-all ${
+                          movimiento.tipo === 'ENTRADA' 
+                            ? 'bg-green-50 border-green-200' 
+                            : 'bg-red-50 border-red-200'
+                        }`}>
+                          <div className="flex items-start justify-between">
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center space-x-2 mb-2">
+                                <p className="font-semibold text-gray-900">{movimiento.descripcion}</p>
+                                <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${
+                                  movimiento.tipo === 'ENTRADA'
+                                    ? 'bg-green-200 text-green-800'
+                                    : 'bg-red-200 text-red-800'
+                                }`}>
+                                  {movimiento.tipo}
+                                </span>
+                              </div>
+
+                              {/* Información secundaria */}
+                              <div className="flex items-center space-x-1.5 text-xs text-gray-500">
+                                <Calendar size={14} className="text-gray-400" />
+                                <span>
+                                  {item.fecha.toLocaleDateString('es-CO', {
+                                    day: '2-digit',
+                                    month: 'short',
+                                    year: 'numeric'
+                                  })}
+                                </span>
+                                {movimiento.hora && (
+                                  <>
+                                    <span className="text-gray-300">•</span>
+                                    <span>{movimiento.hora}</span>
+                                  </>
+                                )}
+                              </div>
+                            </div>
+
+                            {/* Monto */}
+                            <div className="text-right ml-4 flex-shrink-0">
+                              <p className={`text-2xl font-bold mb-1 ${
+                                movimiento.tipo === 'ENTRADA' ? 'text-green-700' : 'text-red-700'
+                              }`}>
+                                {movimiento.tipo === 'ENTRADA' ? '+' : '-'}$
+                                {(Number(movimiento.monto) || 0).toLocaleString('es-CO', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
                               </p>
-                            )}
+                            </div>
                           </div>
                         </div>
-                      </div>
-                    </Link>
-                  )
+                      </Link>
+                    )
+                  }
+                  return null
                 })}
               </div>
             )}

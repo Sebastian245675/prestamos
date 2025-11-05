@@ -58,6 +58,49 @@ public interface PrestamoRepository extends JpaRepository<Prestamo, Long> {
     // Obtener préstamos por cobrador
     List<Prestamo> findByCobradorId(Long cobradorId);
     
+    // Consultas optimizadas para cobradores - filtrar por prestamista y zonas directamente en BD
+    @Query("SELECT p FROM Prestamo p WHERE p.prestamista.id = :prestamistaId " +
+           "AND p.zona IN :zonas " +
+           "ORDER BY p.fechaCreacion DESC")
+    List<Prestamo> findByPrestamistaIdAndZonaIn(
+        @Param("prestamistaId") Long prestamistaId,
+        @Param("zonas") List<String> zonas
+    );
+    
+    @Query("SELECT p FROM Prestamo p WHERE p.prestamista.id = :prestamistaId " +
+           "AND p.estado = :estado " +
+           "AND p.zona IN :zonas " +
+           "ORDER BY p.fechaCreacion DESC")
+    List<Prestamo> findByPrestamistaIdAndEstadoAndZonaIn(
+        @Param("prestamistaId") Long prestamistaId,
+        @Param("estado") Prestamo.EstadoPrestamo estado,
+        @Param("zonas") List<String> zonas
+    );
+    
+    @Query("SELECT p FROM Prestamo p WHERE p.prestamista.id = :prestamistaId " +
+           "AND p.zona IN :zonas " +
+           "AND (LOWER(p.nombreCliente) LIKE LOWER(CONCAT('%', :search, '%')) " +
+           "OR p.telefono LIKE CONCAT('%', :search, '%')) " +
+           "ORDER BY p.fechaCreacion DESC")
+    List<Prestamo> findByPrestamistaIdAndZonaInAndSearchTerm(
+        @Param("prestamistaId") Long prestamistaId,
+        @Param("zonas") List<String> zonas,
+        @Param("search") String search
+    );
+    
+    @Query("SELECT p FROM Prestamo p WHERE p.prestamista.id = :prestamistaId " +
+           "AND p.estado = :estado " +
+           "AND p.zona IN :zonas " +
+           "AND (LOWER(p.nombreCliente) LIKE LOWER(CONCAT('%', :search, '%')) " +
+           "OR p.telefono LIKE CONCAT('%', :search, '%')) " +
+           "ORDER BY p.fechaCreacion DESC")
+    List<Prestamo> findByPrestamistaIdAndEstadoAndZonaInAndSearchTerm(
+        @Param("prestamistaId") Long prestamistaId,
+        @Param("estado") Prestamo.EstadoPrestamo estado,
+        @Param("zonas") List<String> zonas,
+        @Param("search") String search
+    );
+    
     // ============================================
     // CONSULTAS OPTIMIZADAS CON AGREGACIONES SQL
     // ============================================

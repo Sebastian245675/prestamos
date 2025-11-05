@@ -63,7 +63,12 @@ export const movimientosService = {
   async getResumen(userId) {
     try {
       const response = await api.get('/movimientos/resumen')
-      return response.data
+      // Convertir BigDecimal a números
+      return {
+        totalEntradas: Number(response.data.totalEntradas) || 0,
+        totalSalidas: Number(response.data.totalSalidas) || 0,
+        saldo: Number(response.data.saldo) || 0
+      }
     } catch (error) {
       console.error('Error fetching resumen:', error)
       throw error

@@ -6,6 +6,7 @@ import com.prestamos.dto.AbonoRequest;
 import com.prestamos.dto.PrestamoRequest;
 import com.prestamos.entity.Abono;
 import com.prestamos.entity.Prestamo;
+import com.prestamos.entity.Usuario;
 import com.prestamos.repository.AbonoRepository;
 import com.prestamos.repository.CuotaRepository;
 import com.prestamos.repository.PrestamoRepository;
@@ -18,6 +19,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.math.BigDecimal;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -65,15 +67,15 @@ public class PrestamoController {
             @RequestParam(required = false) String estado,
             @RequestParam(required = false) String search) {
         try {
-            Long userId = securityUtils.getCurrentUserId()
+            Usuario usuario = securityUtils.getCurrentUser()
                 .orElseThrow(() -> new RuntimeException("Usuario no autenticado"));
             
             // Sanitizar parámetros de búsqueda
             String sanitizedEstado = estado != null ? inputSanitizer.sanitize(estado) : null;
             String sanitizedSearch = search != null ? inputSanitizer.sanitize(search) : null;
             
-            List<Prestamo> prestamos = prestamoService.obtenerPrestamosPorPrestamista(
-                userId, sanitizedEstado, sanitizedSearch);
+            List<Prestamo> prestamos = prestamoService.obtenerPrestamosPorUsuario(
+                usuario, sanitizedEstado, sanitizedSearch);
             
             return ResponseEntity.ok(prestamos);
             
@@ -87,18 +89,36 @@ public class PrestamoController {
     @GetMapping("/{id}")
     public ResponseEntity<?> obtenerPrestamo(@PathVariable String id) {
         try {
-            Long userId = securityUtils.getCurrentUserId()
+            Usuario usuario = securityUtils.getCurrentUser()
                 .orElseThrow(() -> new RuntimeException("Usuario no autenticado"));
             
             Long prestamoId = inputSanitizer.sanitizeLong(id);
             
             Prestamo prestamo = prestamoService.obtenerPrestamoPorId(prestamoId);
             
-            // Verificar que el préstamo pertenezca al usuario
-            if (!prestamo.getPrestamista().getId().equals(userId)) {
-                log.warn("Intento de acceso no autorizado al préstamo {} por usuario {}", prestamoId, userId);
+            // Verificar acceso según el rol
+            Long prestamistaId = usuario.getRol() == Usuario.RolUsuario.PRESTAMISTA 
+                ? usuario.getId() 
+                : (usuario.getPrestamista() != null ? usuario.getPrestamista().getId() : null);
+            
+            if (prestamistaId == null || !prestamo.getPrestamista().getId().equals(prestamistaId)) {
+                log.warn("Intento de acceso no autorizado al préstamo {} por usuario {}", prestamoId, usuario.getId());
                 return ResponseEntity.status(HttpStatus.FORBIDDEN)
                     .body(createErrorResponse("No tienes acceso a este préstamo"));
+            }
+            
+            // Si es cobrador con acceso por rutas, verificar que el préstamo esté en sus rutas
+            if (usuario.getRol() == Usuario.RolUsuario.COBRADOR) {
+                usuario.getRutasAsignadas().size(); // Forzar carga lazy
+                if (usuario.getRutasAsignadas() != null && !usuario.getRutasAsignadas().isEmpty()) {
+                    List<String> zonasPermitidas = usuario.getRutasAsignadas().stream()
+                        .map(r -> r.getNombre())
+                        .collect(java.util.stream.Collectors.toList());
+                    if (!zonasPermitidas.contains(prestamo.getZona())) {
+                        return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                            .body(createErrorResponse("No tienes acceso a este préstamo"));
+                    }
+                }
             }
             
             return ResponseEntity.ok(prestamo);
@@ -118,10 +138,36 @@ public class PrestamoController {
             @PathVariable String id,
             @Valid @RequestBody AbonoRequest request) {
         try {
-            Long userId = securityUtils.getCurrentUserId()
+            Usuario usuario = securityUtils.getCurrentUser()
                 .orElseThrow(() -> new RuntimeException("Usuario no autenticado"));
             
             Long prestamoId = inputSanitizer.sanitizeLong(id);
+            
+            // Verificar acceso al préstamo antes de registrar abono
+            Prestamo prestamo = prestamoService.obtenerPrestamoPorId(prestamoId);
+            
+            Long prestamistaId = usuario.getRol() == Usuario.RolUsuario.PRESTAMISTA 
+                ? usuario.getId() 
+                : (usuario.getPrestamista() != null ? usuario.getPrestamista().getId() : null);
+            
+            if (prestamistaId == null || !prestamo.getPrestamista().getId().equals(prestamistaId)) {
+                return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                    .body(createErrorResponse("No tienes acceso a este préstamo"));
+            }
+            
+            // Si es cobrador con acceso por rutas, verificar que el préstamo esté en sus rutas
+            if (usuario.getRol() == Usuario.RolUsuario.COBRADOR) {
+                usuario.getRutasAsignadas().size(); // Forzar carga lazy
+                if (usuario.getRutasAsignadas() != null && !usuario.getRutasAsignadas().isEmpty()) {
+                    List<String> zonasPermitidas = usuario.getRutasAsignadas().stream()
+                        .map(r -> r.getNombre())
+                        .collect(java.util.stream.Collectors.toList());
+                    if (!zonasPermitidas.contains(prestamo.getZona())) {
+                        return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                            .body(createErrorResponse("No tienes acceso a este préstamo"));
+                    }
+                }
+            }
             
             // Validar y sanitizar monto
             if (request.getMonto() == null || request.getMonto().compareTo(java.math.BigDecimal.ZERO) <= 0) {
@@ -129,6 +175,7 @@ public class PrestamoController {
                     .body(createErrorResponse("El monto debe ser mayor a cero"));
             }
             
+            Long userId = usuario.getId();
             Abono abono = prestamoService.registrarAbono(prestamoId, userId, request);
             log.info("Abono registrado: ID {} para préstamo {} por usuario {}", 
                 abono.getId(), prestamoId, userId);
@@ -148,16 +195,35 @@ public class PrestamoController {
     @GetMapping("/{id}/abonos")
     public ResponseEntity<?> obtenerAbonos(@PathVariable String id) {
         try {
-            Long userId = securityUtils.getCurrentUserId()
+            Usuario usuario = securityUtils.getCurrentUser()
                 .orElseThrow(() -> new RuntimeException("Usuario no autenticado"));
             
             Long prestamoId = inputSanitizer.sanitizeLong(id);
             
-            // Verificar que el préstamo pertenezca al usuario
+            // Verificar acceso al préstamo
             Prestamo prestamo = prestamoService.obtenerPrestamoPorId(prestamoId);
-            if (!prestamo.getPrestamista().getId().equals(userId)) {
+            
+            Long prestamistaId = usuario.getRol() == Usuario.RolUsuario.PRESTAMISTA 
+                ? usuario.getId() 
+                : (usuario.getPrestamista() != null ? usuario.getPrestamista().getId() : null);
+            
+            if (prestamistaId == null || !prestamo.getPrestamista().getId().equals(prestamistaId)) {
                 return ResponseEntity.status(HttpStatus.FORBIDDEN)
                     .body(createErrorResponse("No tienes acceso a este préstamo"));
+            }
+            
+            // Si es cobrador con acceso por rutas, verificar que el préstamo esté en sus rutas
+            if (usuario.getRol() == Usuario.RolUsuario.COBRADOR) {
+                usuario.getRutasAsignadas().size(); // Forzar carga lazy
+                if (usuario.getRutasAsignadas() != null && !usuario.getRutasAsignadas().isEmpty()) {
+                    List<String> zonasPermitidas = usuario.getRutasAsignadas().stream()
+                        .map(r -> r.getNombre())
+                        .collect(java.util.stream.Collectors.toList());
+                    if (!zonasPermitidas.contains(prestamo.getZona())) {
+                        return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                            .body(createErrorResponse("No tienes acceso a este préstamo"));
+                    }
+                }
             }
             
             List<Abono> abonos = abonoRepository.findByPrestamoId(prestamoId);
@@ -173,16 +239,35 @@ public class PrestamoController {
     @GetMapping("/{id}/cuotas")
     public ResponseEntity<?> obtenerCuotas(@PathVariable String id) {
         try {
-            Long userId = securityUtils.getCurrentUserId()
+            Usuario usuario = securityUtils.getCurrentUser()
                 .orElseThrow(() -> new RuntimeException("Usuario no autenticado"));
             
             Long prestamoId = inputSanitizer.sanitizeLong(id);
             
-            // Verificar que el préstamo pertenezca al usuario
+            // Verificar acceso al préstamo
             Prestamo prestamo = prestamoService.obtenerPrestamoPorId(prestamoId);
-            if (!prestamo.getPrestamista().getId().equals(userId)) {
+            
+            Long prestamistaId = usuario.getRol() == Usuario.RolUsuario.PRESTAMISTA 
+                ? usuario.getId() 
+                : (usuario.getPrestamista() != null ? usuario.getPrestamista().getId() : null);
+            
+            if (prestamistaId == null || !prestamo.getPrestamista().getId().equals(prestamistaId)) {
                 return ResponseEntity.status(HttpStatus.FORBIDDEN)
                     .body(createErrorResponse("No tienes acceso a este préstamo"));
+            }
+            
+            // Si es cobrador con acceso por rutas, verificar que el préstamo esté en sus rutas
+            if (usuario.getRol() == Usuario.RolUsuario.COBRADOR) {
+                usuario.getRutasAsignadas().size(); // Forzar carga lazy
+                if (usuario.getRutasAsignadas() != null && !usuario.getRutasAsignadas().isEmpty()) {
+                    List<String> zonasPermitidas = usuario.getRutasAsignadas().stream()
+                        .map(r -> r.getNombre())
+                        .collect(java.util.stream.Collectors.toList());
+                    if (!zonasPermitidas.contains(prestamo.getZona())) {
+                        return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                            .body(createErrorResponse("No tienes acceso a este préstamo"));
+                    }
+                }
             }
             
             return ResponseEntity.ok(cuotaRepository.findByPrestamoId(prestamoId));
@@ -197,10 +282,10 @@ public class PrestamoController {
     @GetMapping("/clientes")
     public ResponseEntity<?> obtenerClientes() {
         try {
-            Long userId = securityUtils.getCurrentUserId()
+            Usuario usuario = securityUtils.getCurrentUser()
                 .orElseThrow(() -> new RuntimeException("Usuario no autenticado"));
             
-            List<Prestamo> prestamos = prestamoService.obtenerPrestamosPorPrestamista(userId, null, null);
+            List<Prestamo> prestamos = prestamoService.obtenerPrestamosPorUsuario(usuario, null, null);
             
             // Agrupar préstamos por cliente (nombre + teléfono)
             Map<String, Map<String, Object>> clientesMap = new HashMap<>();
@@ -261,11 +346,31 @@ public class PrestamoController {
     @GetMapping("/zonas")
     public ResponseEntity<?> obtenerZonas() {
         try {
-            Long userId = securityUtils.getCurrentUserId()
+            Usuario usuario = securityUtils.getCurrentUser()
                 .orElseThrow(() -> new RuntimeException("Usuario no autenticado"));
             
-            // Usar consulta optimizada con DISTINCT directamente en BD
-            List<String> zonas = prestamoRepository.findDistinctZonasByPrestamistaId(userId);
+            // Determinar el prestamistaId según el rol
+            Long prestamistaId = usuario.getRol() == Usuario.RolUsuario.PRESTAMISTA 
+                ? usuario.getId() 
+                : (usuario.getPrestamista() != null ? usuario.getPrestamista().getId() : null);
+            
+            if (prestamistaId == null) {
+                return ResponseEntity.ok(new ArrayList<>());
+            }
+            
+            // Si es cobrador con acceso por rutas, solo devolver las zonas asignadas
+            if (usuario.getRol() == Usuario.RolUsuario.COBRADOR) {
+                usuario.getRutasAsignadas().size(); // Forzar carga lazy
+                if (usuario.getRutasAsignadas() != null && !usuario.getRutasAsignadas().isEmpty()) {
+                    List<String> zonasPermitidas = usuario.getRutasAsignadas().stream()
+                        .map(r -> r.getNombre())
+                        .collect(java.util.stream.Collectors.toList());
+                    return ResponseEntity.ok(zonasPermitidas);
+                }
+            }
+            
+            // Para prestamistas o cobradores con acceso a TODOS, obtener todas las zonas
+            List<String> zonas = prestamoRepository.findDistinctZonasByPrestamistaId(prestamistaId);
             
             return ResponseEntity.ok(zonas);
             
@@ -279,32 +384,42 @@ public class PrestamoController {
     @GetMapping("/dashboard")
     public ResponseEntity<?> obtenerDashboard() {
         try {
-            Long userId = securityUtils.getCurrentUserId()
+            Usuario usuario = securityUtils.getCurrentUser()
                 .orElseThrow(() -> new RuntimeException("Usuario no autenticado"));
             
-            // Usar consulta optimizada con agregaciones SQL directamente en BD
-            List<Object[]> statsList = prestamoRepository.getDashboardStats(userId);
+            // Usar el método optimizado que ya maneja los filtros según el rol y permisos
+            List<Prestamo> todosLosPrestamos = prestamoService.obtenerPrestamosPorUsuario(usuario, null, null);
+            
+            // Calcular estadísticas usando los préstamos filtrados (ya optimizado según permisos)
+            BigDecimal totalPrestado = todosLosPrestamos.stream()
+                .map(Prestamo::getMontoPrestado)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+            
+            BigDecimal totalPendiente = todosLosPrestamos.stream()
+                .map(Prestamo::getSaldoPendiente)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+            
+            BigDecimal totalCobrado = totalPrestado.subtract(totalPendiente);
+            
+            long prestamosActivos = todosLosPrestamos.stream()
+                .filter(p -> p.getEstado() == Prestamo.EstadoPrestamo.ACTIVO)
+                .count();
+            
+            long prestamosVencidos = todosLosPrestamos.stream()
+                .filter(p -> p.getEstado() == Prestamo.EstadoPrestamo.VENCIDO)
+                .count();
+            
+            long prestamosFinalizados = todosLosPrestamos.stream()
+                .filter(p -> p.getEstado() == Prestamo.EstadoPrestamo.FINALIZADO)
+                .count();
             
             Map<String, Object> dashboard = new HashMap<>();
-            
-            // Manejar el caso cuando no hay préstamos
-            if (statsList == null || statsList.isEmpty() || statsList.get(0) == null) {
-                dashboard.put("totalPrestado", BigDecimal.ZERO);
-                dashboard.put("totalCobrado", BigDecimal.ZERO);
-                dashboard.put("totalPendiente", BigDecimal.ZERO);
-                dashboard.put("prestamosActivos", 0L);
-                dashboard.put("prestamosVencidos", 0L);
-                dashboard.put("prestamosFinalizados", 0L);
-            } else {
-                Object[] stats = statsList.get(0);
-                // Manejar valores null de forma segura y verificar el tipo antes de hacer cast
-                dashboard.put("totalPrestado", convertToBigDecimal(stats[0]));
-                dashboard.put("totalCobrado", convertToBigDecimal(stats[1]));
-                dashboard.put("totalPendiente", convertToBigDecimal(stats[2]));
-                dashboard.put("prestamosActivos", convertToLong(stats[3]));
-                dashboard.put("prestamosVencidos", convertToLong(stats[4]));
-                dashboard.put("prestamosFinalizados", convertToLong(stats[5]));
-            }
+            dashboard.put("totalPrestado", totalPrestado);
+            dashboard.put("totalCobrado", totalCobrado);
+            dashboard.put("totalPendiente", totalPendiente);
+            dashboard.put("prestamosActivos", prestamosActivos);
+            dashboard.put("prestamosVencidos", prestamosVencidos);
+            dashboard.put("prestamosFinalizados", prestamosFinalizados);
             
             return ResponseEntity.ok(dashboard);
             
@@ -320,10 +435,10 @@ public class PrestamoController {
             @RequestParam(required = false) String fecha,
             @RequestParam(required = false) String zona) {
         try {
-            Long userId = securityUtils.getCurrentUserId()
+            Usuario usuario = securityUtils.getCurrentUser()
                 .orElseThrow(() -> new RuntimeException("Usuario no autenticado"));
             
-            List<Prestamo> prestamos = prestamoService.obtenerPrestamosPorPrestamista(userId, null, null);
+            List<Prestamo> prestamos = prestamoService.obtenerPrestamosPorUsuario(usuario, null, null);
             
             // Filtrar por zona si se especifica
             if (zona != null && !zona.equals("TODAS") && !zona.trim().isEmpty()) {

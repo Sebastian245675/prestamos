@@ -1,8 +1,9 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { useAuth } from '../../context/AuthContext'
 import { toast } from 'react-toastify'
-import { CreditCard, TrendingUp, Shield, Zap, ArrowRight, ArrowLeft, Lock, Gift, CheckCircle, BarChart3, Calendar, Users, FileText, Bell, DollarSign } from 'lucide-react'
+import { CreditCard, TrendingUp, Shield, Zap, ArrowRight, ArrowLeft, Lock, Gift, CheckCircle, BarChart3, Calendar, Users, FileText, Bell, DollarSign, XCircle } from 'lucide-react'
+import api from '../../utils/api'
 
 export default function Register() {
   const [step, setStep] = useState(1)
@@ -17,9 +18,51 @@ export default function Register() {
     tipoSuscripcion: 'MENSUAL'
   })
   const [loading, setLoading] = useState(false)
+  const [codigoValido, setCodigoValido] = useState(null) // null = no validado, true = válido, false = inválido
+  const [validandoCodigo, setValidandoCodigo] = useState(false)
+  const timeoutRef = useRef(null)
   const { register } = useAuth()
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
+
+  // Validar código de referido en tiempo real
+  const validarCodigoReferido = async (codigo) => {
+    // Si el código está vacío, resetear validación
+    if (!codigo || codigo.trim() === '') {
+      setCodigoValido(null)
+      return
+    }
+
+    // Limpiar timeout anterior
+    if (timeoutRef.current) {
+      clearTimeout(timeoutRef.current)
+    }
+
+    // Esperar 500ms después de que el usuario deje de escribir (debounce)
+    timeoutRef.current = setTimeout(async () => {
+      setValidandoCodigo(true)
+      try {
+        const response = await api.get(`/public/validar-codigo-referido/${codigo.trim().toUpperCase()}`)
+        setCodigoValido(response.data.valido)
+        if (!response.data.valido) {
+          // No mostrar toast aquí, solo mostrar error visual
+        }
+      } catch (error) {
+        setCodigoValido(false)
+      } finally {
+        setValidandoCodigo(false)
+      }
+    }, 500)
+  }
+
+  // Limpiar timeout al desmontar
+  useEffect(() => {
+    return () => {
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current)
+      }
+    }
+  }, [])
 
   // Obtener código de referido de la URL si existe
   useEffect(() => {
@@ -27,14 +70,23 @@ export default function Register() {
     if (refCode) {
       setFormData(prev => ({ ...prev, codigoReferido: refCode }))
       setShowCodigoReferido(true) // Mostrar el campo si viene código en la URL
+      // Validar el código que viene de la URL
+      validarCodigoReferido(refCode)
     }
   }, [searchParams])
 
   const handleChange = (e) => {
+    const { name, value } = e.target
     setFormData({
       ...formData,
-      [e.target.name]: e.target.value
+      [name]: value
     })
+
+    // Si es el campo de código de referido, validar en tiempo real
+    if (name === 'codigoReferido') {
+      setCodigoValido(null) // Resetear validación mientras escribe
+      validarCodigoReferido(value)
+    }
   }
 
   const handleNext = () => {
@@ -43,6 +95,19 @@ export default function Register() {
       toast.error('Por favor completa todos los campos obligatorios')
       return
     }
+
+    // Si hay código de referido ingresado, validar que sea válido
+    if (formData.codigoReferido && formData.codigoReferido.trim() !== '') {
+      if (codigoValido === false) {
+        toast.error('El código de referido ingresado no es válido. Por favor verifica el código.')
+        return
+      }
+      if (codigoValido === null && validandoCodigo) {
+        toast.error('Por favor espera mientras validamos el código de referido.')
+        return
+      }
+    }
+
     setStep(2)
   }
 
@@ -297,16 +362,53 @@ export default function Register() {
                         <label className="block text-sm font-semibold text-gray-700 mb-2">
                           Código de Referido
                         </label>
-                        <input
-                          type="text"
-                          name="codigoReferido"
-                          value={formData.codigoReferido}
-                          onChange={handleChange}
-                          className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-all text-lg"
-                          placeholder="Ej: REF-000001-A1B2C3"
-                          autoFocus
-                        />
-                        <p className="text-xs text-gray-500 mt-1">Ingresa tu código de referido si tienes uno</p>
+                        <div className="relative">
+                          <input
+                            type="text"
+                            name="codigoReferido"
+                            value={formData.codigoReferido}
+                            onChange={handleChange}
+                            className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 transition-all text-lg ${
+                              codigoValido === true 
+                                ? 'border-green-500 focus:ring-green-500 bg-green-50' 
+                                : codigoValido === false 
+                                ? 'border-red-500 focus:ring-red-500 bg-red-50' 
+                                : 'border-gray-300 focus:ring-primary-500'
+                            }`}
+                            placeholder="Ej: REF-000001-A1B2C3"
+                            autoFocus
+                          />
+                          {validandoCodigo && (
+                            <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
+                              <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-primary-600"></div>
+                            </div>
+                          )}
+                          {codigoValido === true && !validandoCodigo && (
+                            <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
+                              <CheckCircle className="text-green-500" size={20} />
+                            </div>
+                          )}
+                          {codigoValido === false && !validandoCodigo && (
+                            <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
+                              <XCircle className="text-red-500" size={20} />
+                            </div>
+                          )}
+                        </div>
+                        {codigoValido === true && (
+                          <p className="text-xs text-green-600 mt-1 flex items-center space-x-1">
+                            <CheckCircle size={12} />
+                            <span>Código válido</span>
+                          </p>
+                        )}
+                        {codigoValido === false && (
+                          <p className="text-xs text-red-600 mt-1 flex items-center space-x-1">
+                            <XCircle size={12} />
+                            <span>Código de referido no encontrado. Verifica el código.</span>
+                          </p>
+                        )}
+                        {codigoValido === null && formData.codigoReferido.trim() === '' && (
+                          <p className="text-xs text-gray-500 mt-1">Ingresa tu código de referido si tienes uno</p>
+                        )}
                       </div>
                     )}
                   </div>

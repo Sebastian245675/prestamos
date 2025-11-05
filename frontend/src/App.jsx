@@ -17,6 +17,7 @@ import Soporte from './pages/Soporte'
 import Referidos from './pages/Referidos'
 import ClientePortal from './pages/cliente/ClientePortal'
 import Layout from './components/Layout'
+import ProtectedRoute from './components/ProtectedRoute'
 import { NotificationProvider } from './context/NotificationContext'
 
 function AppRoutes() {
@@ -38,19 +39,19 @@ function AppRoutes() {
       
       {user ? (
         <Route element={<Layout />}>
-          <Route path="/dashboard" element={<Dashboard />} />
-          <Route path="/prestamos" element={<Prestamos />} />
-          <Route path="/prestamos/nuevo" element={<NuevoPrestamo />} />
-          <Route path="/prestamos/:id" element={<DetallePrestamo />} />
-          <Route path="/calendario" element={<Calendario />} />
-          <Route path="/reportes" element={<Reportes />} />
-          <Route path="/cobradores" element={<Cobradores />} />
-          <Route path="/movimientos" element={<Movimientos />} />
-          <Route path="/clientes" element={<Clientes />} />
-          <Route path="/clientes/:id" element={<DetalleCliente />} />
+          <Route path="/dashboard" element={<ProtectedRoute permiso="verPrestamos" siempreVisible><Dashboard /></ProtectedRoute>} />
+          <Route path="/prestamos" element={<ProtectedRoute permiso="verPrestamos"><Prestamos /></ProtectedRoute>} />
+          <Route path="/prestamos/nuevo" element={<ProtectedRoute permiso="editarPrestamos"><NuevoPrestamo /></ProtectedRoute>} />
+          <Route path="/prestamos/:id" element={<ProtectedRoute permiso="verPrestamos"><DetallePrestamo /></ProtectedRoute>} />
+          <Route path="/calendario" element={<ProtectedRoute permiso="verCalendario"><Calendario /></ProtectedRoute>} />
+          <Route path="/reportes" element={<ProtectedRoute permiso="verReportes"><Reportes /></ProtectedRoute>} />
+          <Route path="/cobradores" element={<ProtectedRoute soloPrestamista><Cobradores /></ProtectedRoute>} />
+          <Route path="/movimientos" element={<ProtectedRoute permiso="verPrestamos"><Movimientos /></ProtectedRoute>} />
+          <Route path="/clientes" element={<ProtectedRoute permiso="gestionarClientes"><Clientes /></ProtectedRoute>} />
+          <Route path="/clientes/:id" element={<ProtectedRoute permiso="gestionarClientes"><DetalleCliente /></ProtectedRoute>} />
           <Route path="/perfil" element={<Perfil />} />
           <Route path="/soporte" element={<Soporte />} />
-          <Route path="/referidos" element={<Referidos />} />
+          <Route path="/referidos" element={<ProtectedRoute soloPrestamista><Referidos /></ProtectedRoute>} />
           <Route path="/" element={<Navigate to="/dashboard" />} />
         </Route>
       ) : (

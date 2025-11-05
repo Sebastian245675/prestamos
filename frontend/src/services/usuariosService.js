@@ -13,7 +13,10 @@ export const usuariosService = {
         telefono: cobrador.telefono,
         rol: 'COBRADOR',
         activo: cobrador.activo,
-        numeroPrestamos: cobrador.numeroPrestamos || 0
+        permisos: cobrador.permisos || {},
+        numeroPrestamos: cobrador.numeroPrestamos || 0,
+        tipoAccesoPrestamos: cobrador.tipoAccesoPrestamos || 'TODOS',
+        rutasAsignadas: cobrador.rutasAsignadas || []
       }))
     } catch (error) {
       console.error('Error fetching cobradores:', error)
@@ -29,6 +32,9 @@ export const usuariosService = {
         password: cobradorData.password,
         nombreCompleto: cobradorData.nombreCompleto,
         telefono: cobradorData.telefono,
+        permisos: cobradorData.permisos,
+        tipoAccesoPrestamos: cobradorData.tipoAccesoPrestamos,
+        rutasAsignadas: cobradorData.rutasAsignadas
       })
       
       return {
@@ -37,7 +43,8 @@ export const usuariosService = {
         nombreCompleto: response.data.nombreCompleto,
         telefono: response.data.telefono,
         rol: 'COBRADOR',
-        activo: response.data.activo
+        activo: response.data.activo,
+        permisos: response.data.permisos || {}
       }
     } catch (error) {
       console.error('Error creating cobrador:', error)
@@ -55,6 +62,9 @@ export const usuariosService = {
       if (updates.nombreCompleto) updateData.nombreCompleto = updates.nombreCompleto
       if (updates.telefono) updateData.telefono = updates.telefono
       if (updates.password) updateData.password = updates.password
+      if (updates.permisos) updateData.permisos = updates.permisos
+      if (updates.tipoAccesoPrestamos) updateData.tipoAccesoPrestamos = updates.tipoAccesoPrestamos
+      if (updates.rutasAsignadas) updateData.rutasAsignadas = updates.rutasAsignadas
 
       const response = await api.put(`/cobradores/${cobradorId}`, updateData)
 
@@ -63,7 +73,8 @@ export const usuariosService = {
         email: response.data.email,
         nombreCompleto: response.data.nombreCompleto,
         telefono: response.data.telefono,
-        activo: response.data.activo
+        activo: response.data.activo,
+        permisos: response.data.permisos || {}
       }
     } catch (error) {
       console.error('Error updating cobrador:', error)
@@ -77,6 +88,23 @@ export const usuariosService = {
       await api.delete(`/cobradores/${cobradorId}`)
     } catch (error) {
       console.error('Error deactivating cobrador:', error)
+      throw error
+    }
+  },
+
+  // Activar cobrador
+  async activarCobrador(cobradorId) {
+    try {
+      const response = await api.put(`/cobradores/${cobradorId}/activar`)
+      return {
+        id: response.data.id,
+        email: response.data.email,
+        nombreCompleto: response.data.nombreCompleto,
+        telefono: response.data.telefono,
+        activo: response.data.activo
+      }
+    } catch (error) {
+      console.error('Error activating cobrador:', error)
       throw error
     }
   }

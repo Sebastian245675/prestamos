@@ -2,7 +2,8 @@ import { useState, useEffect } from 'react'
 import { toast } from 'react-toastify'
 import { useAuth } from '../context/AuthContext'
 import { usuariosService } from '../services/usuariosService'
-import { Plus, Edit, Trash2, UserPlus, Mail, Phone } from 'lucide-react'
+import { Plus, Edit, Trash2, UserPlus, Mail, Phone, CheckCircle } from 'lucide-react'
+import api from '../utils/api'
 
 export default function Cobradores() {
   const { user } = useAuth()
@@ -10,6 +11,7 @@ export default function Cobradores() {
   const [loading, setLoading] = useState(true)
   const [showModal, setShowModal] = useState(false)
   const [editingCobrador, setEditingCobrador] = useState(null)
+  const [rutas, setRutas] = useState([])
   const [formData, setFormData] = useState({
     nombreCompleto: '',
     email: '',
@@ -24,14 +26,27 @@ export default function Cobradores() {
       gestionarClientes: false,
       verCalendario: true,
       exportarDatos: false
-    }
+    },
+    tipoAccesoPrestamos: 'TODOS', // 'TODOS' o 'RUTAS'
+    rutasAsignadas: [] // IDs de rutas asignadas
   })
 
   useEffect(() => {
     if (user) {
       fetchCobradores()
+      fetchRutas()
     }
   }, [user])
+
+  const fetchRutas = async () => {
+    try {
+      const response = await api.get('/rutas/activas')
+      setRutas(response.data || [])
+    } catch (error) {
+      console.error('Error al cargar rutas:', error)
+      setRutas([])
+    }
+  }
 
   const fetchCobradores = async () => {
     if (!user?.id) return
@@ -63,7 +78,12 @@ export default function Cobradores() {
           email: formData.email,
           nombreCompleto: formData.nombreCompleto,
           telefono: formData.telefono,
-          password: formData.password || undefined
+          password: formData.password || undefined,
+          permisos: formData.permisos,
+          tipoAccesoPrestamos: formData.permisos.verPrestamos ? formData.tipoAccesoPrestamos : 'TODOS',
+          rutasAsignadas: formData.permisos.verPrestamos && formData.tipoAccesoPrestamos === 'RUTAS' 
+            ? formData.rutasAsignadas 
+            : []
         })
         toast.success('Cobrador actualizado exitosamente')
       } else {
@@ -81,7 +101,12 @@ export default function Cobradores() {
           email: formData.email,
           nombreCompleto: formData.nombreCompleto,
           telefono: formData.telefono,
-          password: formData.password
+          password: formData.password,
+          permisos: formData.permisos,
+          tipoAccesoPrestamos: formData.permisos.verPrestamos ? formData.tipoAccesoPrestamos : 'TODOS',
+          rutasAsignadas: formData.permisos.verPrestamos && formData.tipoAccesoPrestamos === 'RUTAS' 
+            ? formData.rutasAsignadas 
+            : []
         })
         toast.success('Cobrador creado exitosamente')
       }
@@ -127,9 +152,22 @@ export default function Cobradores() {
         gestionarClientes: false,
         verCalendario: true,
         exportarDatos: false
-      }
+      },
+      tipoAccesoPrestamos: cobrador.tipoAccesoPrestamos || 'TODOS',
+      rutasAsignadas: cobrador.rutasAsignadas ? cobrador.rutasAsignadas.map(r => r.id) : []
     })
     setShowModal(true)
+  }
+
+  const handleActivate = async (id) => {
+    try {
+      await usuariosService.activarCobrador(id)
+      toast.success('Cobrador activado exitosamente')
+      fetchCobradores()
+    } catch (error) {
+      console.error('Error al activar cobrador:', error)
+      toast.error(error.response?.data?.message || 'Error al activar el cobrador')
+    }
   }
 
   const handleDelete = async (id) => {
@@ -176,12 +214,28 @@ export default function Cobradores() {
   }
 
   const handlePermisoChange = (permiso) => {
+    const newValue = !formData.permisos[permiso]
     setFormData({
       ...formData,
       permisos: {
         ...formData.permisos,
-        [permiso]: !formData.permisos[permiso]
-      }
+        [permiso]: newValue
+      },
+      // Si desactiva verPrestamos, resetear a TODOS
+      tipoAccesoPrestamos: permiso === 'verPrestamos' && !newValue ? 'TODOS' : formData.tipoAccesoPrestamos,
+      rutasAsignadas: permiso === 'verPrestamos' && !newValue ? [] : formData.rutasAsignadas
+    })
+  }
+
+  const handleRutaToggle = (rutaId) => {
+    const nuevasRutas = formData.rutasAsignadas.includes(rutaId)
+      ? formData.rutasAsignadas.filter(id => id !== rutaId)
+      : [...formData.rutasAsignadas, rutaId]
+    
+    setFormData({
+      ...formData,
+      rutasAsignadas: nuevasRutas,
+      tipoAccesoPrestamos: nuevasRutas.length > 0 ? 'RUTAS' : 'TODOS'
     })
   }
 
@@ -240,6 +294,15 @@ export default function Cobradores() {
                   </div>
                 </div>
                 <div className="flex items-center space-x-2">
+                  {!cobrador.activo && (
+                    <button
+                      onClick={() => handleActivate(cobrador.id)}
+                      className="p-2 text-green-600 hover:bg-green-50 rounded-lg transition-colors"
+                      title="Activar cobrador"
+                    >
+                      <CheckCircle size={18} />
+                    </button>
+                  )}
                   <button
                     onClick={() => handleEdit(cobrador)}
                     className="p-2 text-primary-600 hover:bg-primary-50 rounded-lg transition-colors"
@@ -249,6 +312,7 @@ export default function Cobradores() {
                   <button
                     onClick={() => handleDelete(cobrador.id)}
                     className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                    title={cobrador.activo ? 'Desactivar cobrador' : 'Eliminar cobrador'}
                   >
                     <Trash2 size={18} />
                   </button>
@@ -393,6 +457,74 @@ export default function Cobradores() {
                       className="w-5 h-5 text-primary-600 rounded focus:ring-primary-500"
                     />
                   </label>
+
+                  {/* Opciones de acceso a préstamos cuando verPrestamos está activo */}
+                  {formData.permisos.verPrestamos && (
+                    <div className="ml-6 mt-2 mb-4 p-4 bg-gray-50 rounded-lg border border-gray-200">
+                      <label className="block text-sm font-medium text-gray-700 mb-3">
+                        Tipo de acceso a préstamos
+                      </label>
+                      <div className="space-y-2 mb-4">
+                        <label className="flex items-center cursor-pointer">
+                          <input
+                            type="radio"
+                            name="tipoAccesoPrestamos"
+                            value="TODOS"
+                            checked={formData.tipoAccesoPrestamos === 'TODOS'}
+                            onChange={(e) => setFormData({ ...formData, tipoAccesoPrestamos: e.target.value, rutasAsignadas: [] })}
+                            className="mr-2 text-primary-600"
+                          />
+                          <span className="text-sm text-gray-700">Todos los préstamos</span>
+                        </label>
+                        <label className="flex items-center cursor-pointer">
+                          <input
+                            type="radio"
+                            name="tipoAccesoPrestamos"
+                            value="RUTAS"
+                            checked={formData.tipoAccesoPrestamos === 'RUTAS'}
+                            onChange={(e) => setFormData({ ...formData, tipoAccesoPrestamos: e.target.value })}
+                            className="mr-2 text-primary-600"
+                          />
+                          <span className="text-sm text-gray-700">Solo rutas asignadas</span>
+                        </label>
+                      </div>
+
+                      {/* Selección de rutas cuando tipoAccesoPrestamos es RUTAS */}
+                      {formData.tipoAccesoPrestamos === 'RUTAS' && (
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-2">
+                            Seleccionar rutas
+                          </label>
+                          {rutas.length === 0 ? (
+                            <p className="text-sm text-gray-500 italic">
+                              No hay rutas disponibles. Crea rutas desde la página de Préstamos.
+                            </p>
+                          ) : (
+                            <div className="space-y-2 max-h-40 overflow-y-auto">
+                              {rutas.map((ruta) => (
+                                <label
+                                  key={ruta.id}
+                                  className="flex items-center p-2 border border-gray-200 rounded hover:bg-gray-100 cursor-pointer"
+                                >
+                                  <input
+                                    type="checkbox"
+                                    checked={formData.rutasAsignadas.includes(ruta.id)}
+                                    onChange={() => handleRutaToggle(ruta.id)}
+                                    className="mr-2 text-primary-600"
+                                  />
+                                  <div
+                                    className="w-4 h-4 rounded mr-2"
+                                    style={{ backgroundColor: ruta.color }}
+                                  />
+                                  <span className="text-sm text-gray-700">{ruta.nombre}</span>
+                                </label>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  )}
 
                   <label className="flex items-center justify-between p-3 border border-gray-200 rounded-lg cursor-pointer hover:bg-gray-50">
                     <div>

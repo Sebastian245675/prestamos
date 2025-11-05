@@ -1,5 +1,6 @@
 import { Outlet, Link, useLocation } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
+import { usePermisos } from '../hooks/usePermisos'
 import { 
   LayoutDashboard, 
   FileText, 
@@ -14,27 +15,61 @@ import {
   Menu,
   X
 } from 'lucide-react'
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import NotificationBell from './NotificationBell'
 import SettingsButton from './SettingsButton'
 import UserMenu from './UserMenu'
 
 export default function Layout() {
   const { user, logout } = useAuth()
+  const { tienePermiso } = usePermisos()
   const location = useLocation()
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
 
-  const navigation = [
-    { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
-    { name: 'Préstamos', href: '/prestamos', icon: FileText },
-    { name: 'Clientes', href: '/clientes', icon: UserCircle },
-    { name: 'Calendario', href: '/calendario', icon: Calendar },
-    { name: 'Movimientos', href: '/movimientos', icon: Wallet },
-    { name: 'Reportes', href: '/reportes', icon: BarChart3 },
-    { name: 'Cobradores', href: '/cobradores', icon: Users },
-    { name: 'Referidos', href: '/referidos', icon: Gift },
-    { name: 'Soporte', href: '/soporte', icon: HelpCircle },
-  ]
+  // Filtrar navegación según permisos
+  const navigation = useMemo(() => {
+    const allItems = [
+      { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard, permiso: 'verPrestamos' },
+      { name: 'Préstamos', href: '/prestamos', icon: FileText, permiso: 'verPrestamos' },
+      { name: 'Clientes', href: '/clientes', icon: UserCircle, permiso: 'gestionarClientes' },
+      { name: 'Calendario', href: '/calendario', icon: Calendar, permiso: 'verCalendario' },
+      { name: 'Movimientos', href: '/movimientos', icon: Wallet, permiso: 'verPrestamos', soloConPermisoMovimientos: true },
+      { name: 'Reportes', href: '/reportes', icon: BarChart3, permiso: 'verReportes' },
+      { name: 'Cobradores', href: '/cobradores', icon: Users, permiso: null, soloPrestamista: true },
+      { name: 'Referidos', href: '/referidos', icon: Gift, permiso: null, soloPrestamista: true },
+      { name: 'Soporte', href: '/soporte', icon: HelpCircle, permiso: null, siempreVisible: true },
+    ]
+
+    return allItems.filter(item => {
+      // Si siempre es visible (como Soporte), mostrarlo para todos
+      if (item.siempreVisible) {
+        return true
+      }
+      
+      // Si es solo para prestamistas
+      if (item.soloPrestamista) {
+        return user?.rol === 'PRESTAMISTA'
+      }
+      
+      // Para Movimientos, mostrar para prestamistas, pero no para cobradores
+      if (item.soloConPermisoMovimientos) {
+        // Los prestamistas siempre pueden ver movimientos
+        if (user?.rol === 'PRESTAMISTA') {
+          return true
+        }
+        // Los cobradores no pueden ver movimientos (a menos que se agregue un permiso específico)
+        return false
+      }
+      
+      // Si tiene permiso específico, verificar
+      if (item.permiso) {
+        return tienePermiso(item.permiso)
+      }
+      
+      // Por defecto, no mostrar
+      return false
+    })
+  }, [user, tienePermiso])
 
   const isActive = (path) => location.pathname === path
 

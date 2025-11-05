@@ -94,10 +94,10 @@ export default function Movimientos() {
       if (resumenData.totalEntradas === undefined) {
         const totalEntradas = movimientos
           .filter(m => m.tipo === 'ENTRADA')
-          .reduce((sum, m) => sum + m.monto, 0)
+          .reduce((sum, m) => sum + (Number(m.monto) || 0), 0)
         const totalSalidas = movimientos
           .filter(m => m.tipo === 'SALIDA')
-          .reduce((sum, m) => sum + m.monto, 0)
+          .reduce((sum, m) => sum + (Number(m.monto) || 0), 0)
         
         setResumen({
           totalEntradas,
@@ -105,17 +105,22 @@ export default function Movimientos() {
           saldo: totalEntradas - totalSalidas
         })
       } else {
-        setResumen(resumenData)
+        // Convertir valores del backend a números
+        setResumen({
+          totalEntradas: Number(resumenData.totalEntradas) || 0,
+          totalSalidas: Number(resumenData.totalSalidas) || 0,
+          saldo: Number(resumenData.saldo) || 0
+        })
       }
     } catch (error) {
       console.error('Error al cargar resumen:', error)
       // Calcular desde movimientos locales
       const totalEntradas = movimientos
         .filter(m => m.tipo === 'ENTRADA')
-        .reduce((sum, m) => sum + m.monto, 0)
+        .reduce((sum, m) => sum + (Number(m.monto) || 0), 0)
       const totalSalidas = movimientos
         .filter(m => m.tipo === 'SALIDA')
-        .reduce((sum, m) => sum + m.monto, 0)
+        .reduce((sum, m) => sum + (Number(m.monto) || 0), 0)
       
       setResumen({
         totalEntradas,
@@ -123,6 +128,58 @@ export default function Movimientos() {
         saldo: totalEntradas - totalSalidas
       })
     }
+  }
+
+  // Función para convertir formato colombiano a número
+  const parseMontoColombiano = (value) => {
+    if (!value) return 0
+    // Remover espacios
+    let cleaned = value.toString().trim().replace(/\s/g, '')
+    
+    // Si tiene coma, asumir formato colombiano: punto para miles, coma para decimales
+    if (cleaned.includes(',')) {
+      // Reemplazar punto (separador de miles) por nada y coma (decimal) por punto
+      cleaned = cleaned.replace(/\./g, '').replace(',', '.')
+    } else if (cleaned.includes('.')) {
+      // Si solo tiene punto(s), verificar si es separador de miles
+      const parts = cleaned.split('.')
+      
+      // Si tiene múltiples partes
+      if (parts.length > 1) {
+        const lastPart = parts[parts.length - 1]
+        const previousParts = parts.slice(0, -1)
+        
+        // Si el último grupo tiene exactamente 3 dígitos, es muy probable que sea separador de miles
+        // Ejemplos: 40.000, 1.500.000, 100.000
+        if (lastPart.length === 3 && /^\d+$/.test(lastPart)) {
+          // Verificar si los grupos anteriores también parecen ser miles (3 dígitos o menos)
+          const looksLikeThousandSeparator = previousParts.every(part => 
+            part.length <= 3 && /^\d+$/.test(part)
+          )
+          
+          if (looksLikeThousandSeparator) {
+            // Es formato de miles: 40.000 = 40000, 1.500.000 = 1500000
+            cleaned = parts.join('')
+          }
+        }
+        // Si el último grupo tiene 1-2 dígitos, es probablemente decimal (ej: 40.5, 40.50)
+        // Si no es formato de miles, el punto es decimal (caso normal de JavaScript)
+        // parseFloat manejará correctamente "40.5" como 40.5
+      }
+    }
+    
+    const result = parseFloat(cleaned) || 0
+    return result
+  }
+
+  // Función para formatear monto mientras el usuario escribe
+  const formatMontoInput = (value) => {
+    if (!value) return ''
+    // Remover todo excepto números, puntos y comas
+    let cleaned = value.toString().replace(/[^\d.,]/g, '')
+    // Remover espacios
+    cleaned = cleaned.replace(/\s/g, '')
+    return cleaned
   }
 
   const handleSubmit = async (e) => {
@@ -134,7 +191,8 @@ export default function Movimientos() {
     }
     
     try {
-      const monto = parseFloat(formData.monto)
+      const monto = parseMontoColombiano(formData.monto)
+      
       if (isNaN(monto) || monto <= 0) {
         toast.error('El monto debe ser mayor a cero')
         return
@@ -294,7 +352,7 @@ export default function Movimientos() {
             <div className="flex-1 min-w-0">
               <p className="text-xs sm:text-sm text-gray-600 mb-1.5 sm:mb-2">Total Entradas</p>
               <p className="text-xl sm:text-2xl font-bold text-gray-900 truncate">
-                ${resumen.totalEntradas?.toLocaleString('es-CO') || 0}
+                ${resumen.totalEntradas?.toLocaleString('es-CO', { minimumFractionDigits: 0, maximumFractionDigits: 0 }) || 0}
               </p>
             </div>
             <TrendingUp className="text-green-600 flex-shrink-0 ml-2" size={28} />
@@ -306,7 +364,7 @@ export default function Movimientos() {
             <div className="flex-1 min-w-0">
               <p className="text-xs sm:text-sm text-gray-600 mb-1.5 sm:mb-2">Total Salidas</p>
               <p className="text-xl sm:text-2xl font-bold text-gray-900 truncate">
-                ${resumen.totalSalidas?.toLocaleString('es-CO') || 0}
+                ${resumen.totalSalidas?.toLocaleString('es-CO', { minimumFractionDigits: 0, maximumFractionDigits: 0 }) || 0}
               </p>
             </div>
             <TrendingDown className="text-red-600 flex-shrink-0 ml-2" size={28} />
@@ -320,7 +378,7 @@ export default function Movimientos() {
               <p className={`text-xl sm:text-2xl font-bold truncate ${
                 resumen.saldo >= 0 ? 'text-green-700' : 'text-red-700'
               }`}>
-                ${resumen.saldo?.toLocaleString('es-CO') || 0}
+                ${resumen.saldo?.toLocaleString('es-CO', { minimumFractionDigits: 0, maximumFractionDigits: 0 }) || 0}
               </p>
             </div>
             <DollarSign className="text-blue-600 flex-shrink-0 ml-2" size={28} />
@@ -583,7 +641,7 @@ export default function Movimientos() {
                         movimiento.tipo === 'ENTRADA' ? 'text-green-700' : 'text-red-700'
                       }`}>
                         {movimiento.tipo === 'ENTRADA' ? '+' : '-'}
-                        ${movimiento.monto?.toLocaleString('es-CO')}
+                        ${movimiento.monto?.toLocaleString('es-CO', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
                       </p>
                       <p className="text-xs text-gray-500 hidden sm:block">
                         {new Date(movimiento.fecha).toLocaleDateString('es-CO', {
@@ -685,16 +743,20 @@ export default function Movimientos() {
                     $
                   </span>
                   <input
-                    type="number"
+                    type="text"
                     value={formData.monto}
-                    onChange={(e) => setFormData({ ...formData, monto: e.target.value })}
+                    onChange={(e) => {
+                      const formatted = formatMontoInput(e.target.value)
+                      setFormData({ ...formData, monto: formatted })
+                    }}
                     className="input-field pl-12 text-lg h-14 sm:h-12"
                     required
-                    min="1"
-                    step="0.01"
-                    placeholder="0.00"
+                    placeholder="0.000 o 0,00"
                     inputMode="decimal"
                   />
+                  <p className="text-xs text-gray-500 mt-1">
+                    Formato: 40.000 o 40.000,50 (punto para miles, coma para decimales)
+                  </p>
                 </div>
               </div>
 
