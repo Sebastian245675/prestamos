@@ -277,7 +277,19 @@ export default function NuevoPrestamo() {
       navigate('/prestamos')
     } catch (error) {
       console.error('Error creating prestamo:', error)
-      toast.error(error.message || 'Error al crear el préstamo')
+      const errorMessage = error.response?.data?.message || error.message || 'Error al crear el préstamo'
+      
+      // Si es un error de autenticación, no mostrar el toast porque el interceptor ya manejará la redirección
+      if (error.response?.status === 401 || error.response?.status === 403) {
+        const errorData = error.response?.data
+        if (errorData?.message?.includes('autenticado') || errorData?.message?.includes('Token')) {
+          toast.error('Tu sesión ha expirado. Por favor, inicia sesión nuevamente.')
+          // El interceptor ya manejará la redirección
+          return
+        }
+      }
+      
+      toast.error(errorMessage)
     } finally {
       setLoading(false)
     }

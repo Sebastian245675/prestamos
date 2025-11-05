@@ -20,7 +20,8 @@ import {
   Calendar,
   Filter,
   BarChart3,
-  Activity
+  Activity,
+  MapPin
 } from 'lucide-react'
 import { toast } from 'react-toastify'
 
@@ -34,7 +35,7 @@ export default function Dashboard() {
     prestamosVencidos: 0,
     prestamosFinalizados: 0
   })
-  const [ultimosMovimientos, setUltimosMovimientos] = useState([])
+  const [ultimosPrestamos, setUltimosPrestamos] = useState([])
   const [resumenMovimientos, setResumenMovimientos] = useState({
     hoy: { entradas: 0, salidas: 0, neto: 0 },
     semana: { entradas: 0, salidas: 0, neto: 0 },
@@ -46,10 +47,16 @@ export default function Dashboard() {
   useEffect(() => {
     if (user) {
       fetchDashboardData()
-      fetchUltimosMovimientos()
+      fetchUltimosPrestamos()
       fetchResumenMovimientos()
     }
-  }, [filtroPeriodo, user])
+  }, [user])
+  
+  useEffect(() => {
+    if (user) {
+      fetchResumenMovimientos()
+    }
+  }, [filtroPeriodo])
 
   const fetchDashboardData = async () => {
     if (!user?.id) return
@@ -82,39 +89,18 @@ export default function Dashboard() {
     }
   }
 
-  const fetchUltimosMovimientos = async () => {
+  const fetchUltimosPrestamos = async () => {
     if (!user?.id) return
     
     try {
-      const hoy = new Date()
-      const inicioSemana = new Date(hoy)
-      inicioSemana.setDate(hoy.getDate() - hoy.getDay())
-      const inicioMes = new Date(hoy.getFullYear(), hoy.getMonth(), 1)
+      const prestamosData = await prestamosService.getPrestamos(user.id)
       
-      let fechaInicio = new Date()
-      if (filtroPeriodo === 'HOY') {
-        fechaInicio = new Date()
-        fechaInicio.setHours(0, 0, 0, 0)
-      } else if (filtroPeriodo === 'SEMANA') {
-        fechaInicio = inicioSemana
-      } else if (filtroPeriodo === 'MES') {
-        fechaInicio = inicioMes
-      }
-      
-      const fechaFin = new Date()
-      fechaFin.setHours(23, 59, 59, 999)
-      
-      const movimientosData = await movimientosService.getMovimientos(user.id, {
-        fechaDesde: fechaInicio.toISOString().split('T')[0],
-        fechaHasta: fechaFin.toISOString().split('T')[0]
-      })
-      
-      // Tomar los últimos 5 movimientos
-      const ultimos = movimientosData.slice(0, 5)
-      setUltimosMovimientos(ultimos)
+      // Tomar los últimos 5 préstamos ordenados por fecha de creación
+      const ultimos = prestamosData.slice(0, 5)
+      setUltimosPrestamos(ultimos)
     } catch (error) {
-      console.error('Error al cargar últimos movimientos:', error)
-      setUltimosMovimientos([])
+      console.error('Error al cargar últimos préstamos:', error)
+      setUltimosPrestamos([])
     }
   }
 
@@ -180,7 +166,32 @@ export default function Dashboard() {
     )
   }
 
-  const ganancias = stats.totalCobrado - stats.totalPrestado
+  // Función helper para parsear fechas desde el backend (puede venir como LocalDateTime array o string)
+  const parseFecha = (fecha) => {
+    if (!fecha) return null
+    
+    try {
+      // Si es un array (formato LocalDateTime de Java: [year, month, day, hour, minute, second])
+      if (Array.isArray(fecha)) {
+        const [year, month, day, hour = 0, minute = 0, second = 0] = fecha
+        return new Date(year, month - 1, day, hour, minute, second)
+      }
+      
+      // Si es un string ISO
+      if (typeof fecha === 'string') {
+        return new Date(fecha)
+      }
+      
+      return null
+    } catch (e) {
+      console.error('Error parsing fecha:', fecha, e)
+      return null
+    }
+  }
+
+  // Las ganancias se calculan solo con lo realmente cobrado (capital + intereses) - capital prestado
+  // Si no hay nada cobrado, las ganancias son 0
+  const ganancias = Math.max(0, stats.totalCobrado - stats.totalPrestado)
 
   return (
     <div className="space-y-6">
@@ -408,25 +419,25 @@ export default function Dashboard() {
           </div>
         </div>
 
-        {/* Timeline de Movimientos */}
+        {/* Timeline de Préstamos Recientes */}
         <div className="card">
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center space-x-2">
               <Clock className="text-primary-600" size={20} />
               <h3 className="text-lg font-semibold text-gray-900">Actividad Reciente</h3>
             </div>
-            <Link to="/movimientos" className="text-sm text-primary-600 hover:text-primary-700 font-medium">
+            <Link to="/prestamos" className="text-sm text-primary-600 hover:text-primary-700 font-medium">
               Ver completo →
             </Link>
           </div>
           
           <div className="space-y-3">
-            {ultimosMovimientos.length === 0 ? (
+            {ultimosPrestamos.length === 0 ? (
               <div className="text-center py-12">
-                <Activity className="mx-auto text-gray-300 mb-3" size={48} />
-                <p className="text-gray-500 text-lg mb-2">No hay movimientos en este período</p>
-                <Link to="/movimientos" className="text-primary-600 hover:text-primary-700 font-medium text-sm">
-                  Registrar primer movimiento
+                <CreditCard className="mx-auto text-gray-300 mb-3" size={48} />
+                <p className="text-gray-500 text-lg mb-2">No hay préstamos registrados</p>
+                <Link to="/prestamos/nuevo" className="text-primary-600 hover:text-primary-700 font-medium text-sm">
+                  Crear primer préstamo
                 </Link>
               </div>
             ) : (
@@ -434,111 +445,119 @@ export default function Dashboard() {
                 {/* Línea vertical del timeline */}
                 <div className="absolute left-6 top-0 bottom-0 w-0.5 bg-gray-200"></div>
                 
-                {ultimosMovimientos.map((movimiento, index) => (
-                  <div key={movimiento.id} className="relative flex items-start space-x-4 pb-4 last:pb-0">
-                    {/* Punto del timeline */}
-                    <div className={`relative z-10 w-12 h-12 rounded-full flex items-center justify-center flex-shrink-0 border-4 border-white ${
-                      movimiento.tipo === 'ENTRADA' ? 'bg-green-500' : 'bg-red-500'
-                    }`}>
-                      {movimiento.tipo === 'ENTRADA' ? (
-                        <TrendingUp className="text-white" size={16} />
-                      ) : (
-                        <TrendingDown className="text-white" size={16} />
-                      )}
-                    </div>
+                {ultimosPrestamos.map((prestamo, index) => {
+                  const getEstadoColor = (estado) => {
+                    switch (estado) {
+                      case 'ACTIVO':
+                        return 'bg-green-500'
+                      case 'VENCIDO':
+                        return 'bg-red-500'
+                      case 'FINALIZADO':
+                        return 'bg-gray-500'
+                      default:
+                        return 'bg-blue-500'
+                    }
+                  }
+                  
+                  const getEstadoBg = (estado) => {
+                    switch (estado) {
+                      case 'ACTIVO':
+                        return 'bg-green-50 border-green-200'
+                      case 'VENCIDO':
+                        return 'bg-red-50 border-red-200'
+                      case 'FINALIZADO':
+                        return 'bg-gray-50 border-gray-200'
+                      default:
+                        return 'bg-blue-50 border-blue-200'
+                    }
+                  }
+                  
+                  return (
+                    <Link 
+                      key={prestamo.id} 
+                      to={`/prestamos/${prestamo.id}`}
+                      className="relative flex items-start space-x-4 pb-4 last:pb-0 block hover:opacity-80 transition-opacity"
+                    >
+                      {/* Punto del timeline */}
+                      <div className={`relative z-10 w-12 h-12 rounded-full flex items-center justify-center flex-shrink-0 border-4 border-white ${getEstadoColor(prestamo.estado)}`}>
+                        <CreditCard className="text-white" size={16} />
+                      </div>
 
-                    {/* Contenido del movimiento */}
-                    <div className={`flex-1 rounded-lg border-2 p-4 hover:shadow-md transition-all ${
-                      movimiento.tipo === 'ENTRADA'
-                        ? 'bg-green-50 border-green-200'
-                        : 'bg-red-50 border-red-200'
-                    }`}>
-                      <div className="flex items-start justify-between">
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center space-x-2 mb-2">
-                            <p className="font-semibold text-gray-900">{movimiento.descripcion}</p>
-                            <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${
-                              movimiento.tipo === 'ENTRADA'
-                                ? 'bg-green-200 text-green-800'
-                                : 'bg-red-200 text-red-800'
-                            }`}>
-                              {movimiento.tipo}
-                            </span>
-                          </div>
-
-                          {/* Información secundaria */}
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-2 mb-2">
-                            {movimiento.cliente && (
-                              <div className="flex items-center space-x-1.5 text-xs text-gray-600">
-                                <UserCircle size={14} className="text-gray-400" />
-                                <span className="font-medium">{movimiento.cliente.nombre}</span>
-                                {movimiento.prestamo && (
-                                  <span className="text-gray-400">•</span>
-                                )}
-                                {movimiento.prestamo && (
-                                  <span className="text-primary-600 font-medium">{movimiento.prestamo.numero}</span>
-                                )}
-                              </div>
-                            )}
-                            
-                            <div className="flex items-center space-x-1.5 text-xs text-gray-600">
-                              {movimiento.metodo === 'EFECTIVO' ? (
-                                <Wallet size={14} className="text-gray-400" />
-                              ) : (
-                                <CreditCard size={14} className="text-gray-400" />
-                              )}
-                              <span>{movimiento.metodo}</span>
-                            </div>
-                            
-                            {movimiento.usuario && (
-                              <div className="flex items-center space-x-1.5 text-xs text-gray-600">
-                                <User size={14} className="text-gray-400" />
-                                <span>{movimiento.usuario.nombre}</span>
-                                {movimiento.usuario.rol === 'COBRADOR' && (
-                                  <span className="px-1.5 py-0.5 bg-blue-100 text-blue-700 rounded text-xs font-medium">
-                                    Cobrador
-                                  </span>
-                                )}
-                              </div>
-                            )}
-                            
-                            <div className="flex items-center space-x-1.5 text-xs text-gray-500">
-                              <Calendar size={14} className="text-gray-400" />
-                              <span>
-                                {new Date(movimiento.fecha).toLocaleDateString('es-CO', {
-                                  day: '2-digit',
-                                  month: 'short',
-                                  year: 'numeric'
-                                })}
+                      {/* Contenido del préstamo */}
+                      <div className={`flex-1 rounded-lg border-2 p-4 hover:shadow-md transition-all ${getEstadoBg(prestamo.estado)}`}>
+                        <div className="flex items-start justify-between">
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center space-x-2 mb-2">
+                              <p className="font-semibold text-gray-900">{prestamo.nombreCliente}</p>
+                              <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${
+                                prestamo.estado === 'ACTIVO'
+                                  ? 'bg-green-200 text-green-800'
+                                  : prestamo.estado === 'VENCIDO'
+                                  ? 'bg-red-200 text-red-800'
+                                  : 'bg-gray-200 text-gray-800'
+                              }`}>
+                                {prestamo.estado}
                               </span>
-                              {movimiento.hora && (
-                                <>
-                                  <span className="text-gray-300">•</span>
-                                  <span>{movimiento.hora}</span>
-                                </>
+                            </div>
+
+                            {/* Información secundaria */}
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-2 mb-2">
+                              {prestamo.telefono && (
+                                <div className="flex items-center space-x-1.5 text-xs text-gray-600">
+                                  <UserCircle size={14} className="text-gray-400" />
+                                  <span>{prestamo.telefono}</span>
+                                </div>
+                              )}
+                              
+                              {prestamo.zona && (
+                                <div className="flex items-center space-x-1.5 text-xs text-gray-600">
+                                  <MapPin size={14} className="text-gray-400" />
+                                  <span>{prestamo.zona}</span>
+                                </div>
+                              )}
+                              
+                              <div className="flex items-center space-x-1.5 text-xs text-gray-500">
+                                <Calendar size={14} className="text-gray-400" />
+                                <span>
+                                  {(() => {
+                                    const fecha = parseFecha(prestamo.fechaCreacion)
+                                    if (!fecha || isNaN(fecha.getTime())) {
+                                      return 'Sin fecha'
+                                    }
+                                    return fecha.toLocaleDateString('es-CO', {
+                                      day: '2-digit',
+                                      month: 'short',
+                                      year: 'numeric'
+                                    })
+                                  })()}
+                                </span>
+                              </div>
+                              
+                              {prestamo.numeroCuotas && (
+                                <div className="flex items-center space-x-1.5 text-xs text-gray-600">
+                                  <CreditCard size={14} className="text-gray-400" />
+                                  <span>{prestamo.cuotasPagadas || 0}/{prestamo.numeroCuotas} cuotas</span>
+                                </div>
                               )}
                             </div>
                           </div>
-                        </div>
 
-                        {/* Monto */}
-                        <div className="text-right ml-4 flex-shrink-0">
-                          <p className={`text-2xl font-bold mb-1 ${
-                            movimiento.tipo === 'ENTRADA' ? 'text-green-700' : 'text-red-700'
-                          }`}>
-                            {movimiento.tipo === 'ENTRADA' ? '+' : '-'}
-                            ${typeof movimiento.monto === 'number' ? movimiento.monto.toLocaleString('es-CO') : movimiento.monto?.toLocaleString('es-CO')}
-                          </p>
-                          {movimiento.categoria && (
-                            <span className="text-xs text-gray-500 capitalize">
-                              {movimiento.categoria.replace('_', ' ').toLowerCase()}
-                            </span>
-                          )}
+                          {/* Monto */}
+                          <div className="text-right ml-4 flex-shrink-0">
+                            <p className="text-2xl font-bold text-gray-900 mb-1">
+                              ${typeof prestamo.montoPrestado === 'number' ? prestamo.montoPrestado.toLocaleString('es-CO') : parseFloat(prestamo.montoPrestado || 0).toLocaleString('es-CO')}
+                            </p>
+                            {prestamo.saldoPendiente !== undefined && (
+                              <p className="text-sm text-gray-600">
+                                Pendiente: ${typeof prestamo.saldoPendiente === 'number' ? prestamo.saldoPendiente.toLocaleString('es-CO') : parseFloat(prestamo.saldoPendiente || 0).toLocaleString('es-CO')}
+                              </p>
+                            )}
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  </div>
-                ))}
+                    </Link>
+                  )
+                })}
               </div>
             )}
           </div>

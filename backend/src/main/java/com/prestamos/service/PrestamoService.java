@@ -131,8 +131,12 @@ public class PrestamoService {
             .orElseThrow(() -> new RuntimeException("Usuario no encontrado"));
         
         // Validar monto
+        if (request.getMonto() == null || request.getMonto().compareTo(BigDecimal.ZERO) <= 0) {
+            throw new IllegalArgumentException("El monto debe ser mayor a cero");
+        }
+        
         if (request.getMonto().compareTo(prestamo.getSaldoPendiente()) > 0) {
-            throw new RuntimeException("El monto del abono no puede ser mayor al saldo pendiente");
+            throw new IllegalArgumentException("El monto del abono no puede ser mayor al saldo pendiente");
         }
         
         // Crear abono
@@ -142,6 +146,9 @@ public class PrestamoService {
         abono.setMonto(request.getMonto());
         abono.setFechaAbono(request.getFechaAbono() != null ? request.getFechaAbono() : LocalDate.now());
         abono.setObservaciones(request.getObservaciones());
+        if (request.getEsSoloIntereses() != null) {
+            abono.setEsSoloIntereses(request.getEsSoloIntereses());
+        }
         
         abono = abonoRepository.save(abono);
         
@@ -150,29 +157,144 @@ public class PrestamoService {
         prestamo.setSaldoPendiente(nuevoSaldo);
         
         // Calcular cuotas pagadas
-        BigDecimal montoPorCuota = prestamo.getMontoPrestado()
-            .divide(new BigDecimal(prestamo.getNumeroCuotas()), 2, RoundingMode.HALF_UP);
-        int nuevasCuotasPagadas = prestamo.getMontoPrestado()
-            .subtract(nuevoSaldo)
-            .divide(montoPorCuota, 0, RoundingMode.DOWN)
-            .intValue();
-        prestamo.setCuotasPagadas(Math.min(nuevasCuotasPagadas, prestamo.getNumeroCuotas()));
+        try {
+            if (prestamo.getNumeroCuotas() != null && prestamo.getNumeroCuotas() > 0) {
+                BigDecimal montoPorCuota = prestamo.getMontoPrestado()
+                    .divide(new BigDecimal(prestamo.getNumeroCuotas()), 2, RoundingMode.HALF_UP);
+                
+                if (montoPorCuota.compareTo(BigDecimal.ZERO) > 0) {
+                    BigDecimal montoPagado = prestamo.getMontoPrestado().subtract(nuevoSaldo);
+                    int nuevasCuotasPagadas = montoPagado
+                        .divide(montoPorCuota, 0, RoundingMode.DOWN)
+                        .intValue();
+                    prestamo.setCuotasPagadas(Math.min(nuevasCuotasPagadas, prestamo.getNumeroCuotas()));
+                }
+            }
+        } catch (ArithmeticException e) {
+            log.warn("Error calculando cuotas pagadas para préstamo {}: {}", prestamoId, e.getMessage());
+            // Si hay error en el cálculo, usar una aproximación basada en el porcentaje pagado
+            if (prestamo.getMontoPrestado().compareTo(BigDecimal.ZERO) > 0) {
+                BigDecimal porcentajePagado = BigDecimal.ONE
+                    .subtract(nuevoSaldo.divide(prestamo.getMontoPrestado(), 4, RoundingMode.HALF_UP));
+                int aproximacionCuotas = porcentajePagado
+                    .multiply(new BigDecimal(prestamo.getNumeroCuotas()))
+                    .setScale(0, RoundingMode.HALF_UP)
+                    .intValue();
+                prestamo.setCuotasPagadas(Math.min(aproximacionCuotas, prestamo.getNumeroCuotas()));
+            }
+        }
         
         // Actualizar estado
         if (nuevoSaldo.compareTo(BigDecimal.ZERO) <= 0) {
             prestamo.setEstado(Prestamo.EstadoPrestamo.FINALIZADO);
             prestamo.setCuotasPagadas(prestamo.getNumeroCuotas());
-        } else if (prestamo.getFechaVencimiento().isBefore(LocalDate.now()) && 
+        } else if (prestamo.getFechaVencimiento() != null && 
+                   prestamo.getFechaVencimiento().isBefore(LocalDate.now()) && 
                    prestamo.getEstado() == Prestamo.EstadoPrestamo.ACTIVO) {
             prestamo.setEstado(Prestamo.EstadoPrestamo.VENCIDO);
         }
         
         prestamoRepository.save(prestamo);
         
+        // Sincronizar todas las cuotas basándose en todos los abonos registrados
+        sincronizarCuotasConAbonos(prestamo);
+        
         log.info("Abono registrado: ID {} de {} para préstamo {}", 
             abono.getId(), request.getMonto(), prestamoId);
         
         return abono;
+    }
+    
+    /**
+     * Sincroniza las cuotas del préstamo basándose en todos los abonos registrados.
+     * Este método asegura que las cuotas se marquen como PAGADAS si el total de abonos
+     * cubre el monto de las cuotas en orden.
+     */
+    private void sincronizarCuotasConAbonos(Prestamo prestamo) {
+        try {
+            log.info("Sincronizando cuotas para préstamo {} basándose en todos los abonos", prestamo.getId());
+            
+            // Obtener todos los abonos del préstamo ordenados por fecha
+            List<Abono> abonos = abonoRepository.findByPrestamoId(prestamo.getId())
+                .stream()
+                .filter(a -> !Boolean.TRUE.equals(a.getEsSoloIntereses())) // Excluir abonos solo de intereses
+                .sorted((a1, a2) -> a1.getFechaAbono().compareTo(a2.getFechaAbono()))
+                .collect(java.util.stream.Collectors.toList());
+            
+            BigDecimal totalAbonos = abonos.stream()
+                .map(Abono::getMonto)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+            
+            log.info("Total abonos encontrados: {} con monto total: {}", abonos.size(), totalAbonos);
+            
+            // Obtener todas las cuotas ordenadas por número
+            List<Cuota> todasLasCuotas = cuotaRepository.findByPrestamoId(prestamo.getId())
+                .stream()
+                .sorted((c1, c2) -> c1.getNumeroCuota().compareTo(c2.getNumeroCuota()))
+                .collect(java.util.stream.Collectors.toList());
+            
+            log.info("Total cuotas encontradas: {}", todasLasCuotas.size());
+            
+            BigDecimal montoRestante = totalAbonos;
+            int cuotasActualizadas = 0;
+            
+            for (Cuota cuota : todasLasCuotas) {
+                if (montoRestante.compareTo(BigDecimal.ZERO) <= 0) {
+                    // Si ya no hay monto restante, marcar las cuotas restantes como pendientes si estaban pagadas por error
+                    if (cuota.getEstado() == Cuota.EstadoCuota.PAGADA && cuota.getFechaPago() == null) {
+                        cuota.setEstado(Cuota.EstadoCuota.PENDIENTE);
+                        cuotaRepository.save(cuota);
+                    }
+                    continue;
+                }
+                
+                BigDecimal montoCuota = cuota.getMonto();
+                
+                // Usar comparación con tolerancia para evitar problemas de precisión
+                BigDecimal tolerancia = montoCuota.multiply(new BigDecimal("0.01")); // 1% de tolerancia
+                BigDecimal montoMinimo = montoCuota.subtract(tolerancia);
+                
+                if (montoRestante.compareTo(montoMinimo) >= 0) {
+                    // Si la cuota no está marcada como pagada, actualizarla
+                    if (cuota.getEstado() != Cuota.EstadoCuota.PAGADA) {
+                        cuota.setEstado(Cuota.EstadoCuota.PAGADA);
+                        
+                        // Buscar la fecha del abono más reciente que cubrió esta cuota
+                        // Para simplificar, usamos la fecha del último abono si hay alguno
+                        if (!abonos.isEmpty()) {
+                            LocalDate fechaUltimoAbono = abonos.get(abonos.size() - 1).getFechaAbono();
+                            cuota.setFechaPago(fechaUltimoAbono);
+                        }
+                        
+                        cuotaRepository.save(cuota);
+                        cuotasActualizadas++;
+                        log.info("Cuota #{} marcada como PAGADA", cuota.getNumeroCuota());
+                    }
+                    
+                    montoRestante = montoRestante.subtract(montoCuota);
+                    
+                    // Si el monto restante es negativo, ajustarlo a cero
+                    if (montoRestante.compareTo(BigDecimal.ZERO) < 0) {
+                        montoRestante = BigDecimal.ZERO;
+                    }
+                } else {
+                    // Si la cuota estaba marcada como pagada pero ya no hay monto suficiente, corregirla
+                    if (cuota.getEstado() == Cuota.EstadoCuota.PAGADA) {
+                        cuota.setEstado(Cuota.EstadoCuota.PENDIENTE);
+                        cuota.setFechaPago(null);
+                        cuotaRepository.save(cuota);
+                        log.info("Cuota #{} corregida a PENDIENTE (monto insuficiente)", cuota.getNumeroCuota());
+                    }
+                    break;
+                }
+            }
+            
+            log.info("Sincronización de cuotas completada. Cuotas actualizadas: {}", cuotasActualizadas);
+            
+        } catch (Exception e) {
+            log.error("Error al sincronizar cuotas con abonos para préstamo {}: {}", prestamo.getId(), e.getMessage(), e);
+            // No lanzamos la excepción para que el abono se registre aunque haya error en actualizar cuotas
+        }
     }
     
     @Transactional

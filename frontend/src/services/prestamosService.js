@@ -29,6 +29,7 @@ export const prestamosService = {
         frecuenciaPago: prestamo.frecuenciaPago,
         fechaInicio: prestamo.fechaInicio,
         fechaVencimiento: prestamo.fechaVencimiento,
+        fechaCreacion: prestamo.fechaCreacion,
         estado: prestamo.estado,
         zona: prestamo.zona,
         cobradorId: prestamo.cobrador?.id,
@@ -103,7 +104,8 @@ export const prestamosService = {
       }
     } catch (error) {
       console.error('Error creating prestamo:', error)
-      throw error
+      const errorMessage = error.response?.data?.message || error.message || 'Error al crear el préstamo'
+      throw new Error(errorMessage)
     }
   },
 

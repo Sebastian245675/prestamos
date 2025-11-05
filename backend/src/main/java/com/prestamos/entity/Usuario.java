@@ -1,5 +1,6 @@
 package com.prestamos.entity;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Data;
@@ -58,7 +59,8 @@ public class Usuario {
     @JoinColumn(name = "prestamista_id")
     private Usuario prestamista; // Para cobradores
     
-    @OneToMany(mappedBy = "usuario")
+    @OneToMany(mappedBy = "prestamista")
+    @JsonIgnore
     private List<Prestamo> prestamos;
     
     @Column(nullable = false)

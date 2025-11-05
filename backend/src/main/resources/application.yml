@@ -4,9 +4,10 @@ spring:
   
   datasource:
     # Configuración para Supabase (Proyecto: ijskcroggxijvxronqy)
-    # Para obtener el password: Supabase Dashboard → Project Settings → Database → "Restablecer contraseña"
-    url: jdbc:postgresql://db.ijjskcroggxijvxronqy.supabase.co:5432/postgres?sslmode=require
-    username: postgres
+    # Usando Session Pooler para IPv4 (compatible con IPv4)
+    # URL del Session Pooler obtenida del dashboard de Supabase
+    url: jdbc:postgresql://aws-1-us-east-1.pooler.supabase.com:5432/postgres?sslmode=require
+    username: postgres.ijjskcroggxijvxronqy
     password: 2167296210a
     driver-class-name: org.postgresql.Driver
     hikari:

@@ -139,9 +139,9 @@ public class PrestamoController {
             return ResponseEntity.badRequest()
                 .body(createErrorResponse(e.getMessage()));
         } catch (Exception e) {
-            log.error("Error al registrar abono: {}", e.getMessage());
+            log.error("Error al registrar abono: {}", e.getMessage(), e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                .body(createErrorResponse("Error al registrar el abono"));
+                .body(createErrorResponse("Error al registrar el abono: " + e.getMessage()));
         }
     }
     
@@ -283,22 +283,35 @@ public class PrestamoController {
                 .orElseThrow(() -> new RuntimeException("Usuario no autenticado"));
             
             // Usar consulta optimizada con agregaciones SQL directamente en BD
-            Object[] stats = prestamoRepository.getDashboardStats(userId);
+            List<Object[]> statsList = prestamoRepository.getDashboardStats(userId);
             
             Map<String, Object> dashboard = new HashMap<>();
-            dashboard.put("totalPrestado", ((java.math.BigDecimal) stats[0]));
-            dashboard.put("totalCobrado", ((java.math.BigDecimal) stats[1]));
-            dashboard.put("totalPendiente", ((java.math.BigDecimal) stats[2]));
-            dashboard.put("prestamosActivos", ((java.math.BigInteger) stats[3]).longValue());
-            dashboard.put("prestamosVencidos", ((java.math.BigInteger) stats[4]).longValue());
-            dashboard.put("prestamosFinalizados", ((java.math.BigInteger) stats[5]).longValue());
+            
+            // Manejar el caso cuando no hay préstamos
+            if (statsList == null || statsList.isEmpty() || statsList.get(0) == null) {
+                dashboard.put("totalPrestado", BigDecimal.ZERO);
+                dashboard.put("totalCobrado", BigDecimal.ZERO);
+                dashboard.put("totalPendiente", BigDecimal.ZERO);
+                dashboard.put("prestamosActivos", 0L);
+                dashboard.put("prestamosVencidos", 0L);
+                dashboard.put("prestamosFinalizados", 0L);
+            } else {
+                Object[] stats = statsList.get(0);
+                // Manejar valores null de forma segura y verificar el tipo antes de hacer cast
+                dashboard.put("totalPrestado", convertToBigDecimal(stats[0]));
+                dashboard.put("totalCobrado", convertToBigDecimal(stats[1]));
+                dashboard.put("totalPendiente", convertToBigDecimal(stats[2]));
+                dashboard.put("prestamosActivos", convertToLong(stats[3]));
+                dashboard.put("prestamosVencidos", convertToLong(stats[4]));
+                dashboard.put("prestamosFinalizados", convertToLong(stats[5]));
+            }
             
             return ResponseEntity.ok(dashboard);
             
         } catch (Exception e) {
-            log.error("Error al obtener dashboard: {}", e.getMessage());
+            log.error("Error al obtener dashboard: {}", e.getMessage(), e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                .body(createErrorResponse("Error al obtener dashboard"));
+                .body(createErrorResponse("Error al obtener dashboard: " + e.getMessage()));
         }
     }
     
@@ -424,5 +437,44 @@ public class PrestamoController {
         response.put("error", true);
         response.put("message", message);
         return response;
+    }
+    
+    private BigDecimal convertToBigDecimal(Object value) {
+        if (value == null) {
+            return BigDecimal.ZERO;
+        }
+        if (value instanceof BigDecimal) {
+            return (BigDecimal) value;
+        }
+        if (value instanceof Number) {
+            return BigDecimal.valueOf(((Number) value).doubleValue());
+        }
+        try {
+            return new BigDecimal(value.toString());
+        } catch (Exception e) {
+            log.warn("Error al convertir {} a BigDecimal: {}", value, e.getMessage());
+            return BigDecimal.ZERO;
+        }
+    }
+    
+    private Long convertToLong(Object value) {
+        if (value == null) {
+            return 0L;
+        }
+        if (value instanceof Long) {
+            return (Long) value;
+        }
+        if (value instanceof Number) {
+            return ((Number) value).longValue();
+        }
+        if (value instanceof java.math.BigInteger) {
+            return ((java.math.BigInteger) value).longValue();
+        }
+        try {
+            return Long.parseLong(value.toString());
+        } catch (Exception e) {
+            log.warn("Error al convertir {} a Long: {}", value, e.getMessage());
+            return 0L;
+        }
     }
 }

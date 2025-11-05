@@ -63,16 +63,18 @@ public interface PrestamoRepository extends JpaRepository<Prestamo, Long> {
     // ============================================
     
     // Estadísticas del dashboard usando agregaciones SQL (mucho más rápido)
+    // total_cobrado ahora se calcula como la suma de todos los abonos (capital + intereses)
     @Query(value = "SELECT " +
-           "COALESCE(SUM(monto_prestado), 0) as total_prestado, " +
-           "COALESCE(SUM(monto_prestado - saldo_pendiente), 0) as total_cobrado, " +
-           "COALESCE(SUM(saldo_pendiente), 0) as total_pendiente, " +
-           "COUNT(*) FILTER (WHERE estado = 'ACTIVO') as prestamos_activos, " +
-           "COUNT(*) FILTER (WHERE estado = 'VENCIDO') as prestamos_vencidos, " +
-           "COUNT(*) FILTER (WHERE estado = 'FINALIZADO') as prestamos_finalizados " +
-           "FROM prestamos WHERE prestamista_id = :prestamistaId",
+           "COALESCE(SUM(p.monto_prestado), 0) as total_prestado, " +
+           "COALESCE((SELECT SUM(monto) FROM abonos WHERE prestamo_id IN (SELECT id FROM prestamos WHERE prestamista_id = :prestamistaId)), 0) as total_cobrado, " +
+           "COALESCE(SUM(p.saldo_pendiente), 0) as total_pendiente, " +
+           "COUNT(*) FILTER (WHERE p.estado = 'ACTIVO') as prestamos_activos, " +
+           "COUNT(*) FILTER (WHERE p.estado = 'VENCIDO') as prestamos_vencidos, " +
+           "COUNT(*) FILTER (WHERE p.estado = 'FINALIZADO') as prestamos_finalizados " +
+           "FROM prestamos p " +
+           "WHERE p.prestamista_id = :prestamistaId",
            nativeQuery = true)
-    Object[] getDashboardStats(@Param("prestamistaId") Long prestamistaId);
+    List<Object[]> getDashboardStats(@Param("prestamistaId") Long prestamistaId);
     
     // Obtener zonas únicas usando DISTINCT (optimizado con índice en zona)
     @Query("SELECT DISTINCT p.zona FROM Prestamo p WHERE p.prestamista.id = :prestamistaId AND p.zona IS NOT NULL AND p.zona != '' ORDER BY p.zona")

@@ -36,6 +36,7 @@ export default function DetallePrestamo() {
   const [cuotas, setCuotas] = useState([])
   const [loading, setLoading] = useState(true)
   const [showAbonoModal, setShowAbonoModal] = useState(false)
+  const [cuotaSeleccionada, setCuotaSeleccionada] = useState(null)
   const [abonoForm, setAbonoForm] = useState({
     monto: '',
     fechaAbono: new Date().toISOString().split('T')[0],
@@ -44,6 +45,146 @@ export default function DetallePrestamo() {
     esSoloIntereses: false
   })
   const [atrasoManual, setAtrasoManual] = useState(0)
+
+  // Formatear número con separadores de miles (formato colombiano)
+  const formatNumber = (num) => {
+    if (!num) return ''
+    // Remover todo excepto números, puntos y comas
+    let numStr = num.toString().replace(/[^\d.,]/g, '')
+    
+    // Si hay coma, reemplazar por punto temporalmente para el procesamiento
+    const hasComa = numStr.includes(',')
+    if (hasComa) {
+      numStr = numStr.replace(',', '.')
+    }
+    
+    // Separar parte entera y decimal
+    const parts = numStr.split('.')
+    const parteEntera = parts[0].replace(/\D/g, '')
+    const parteDecimal = parts[1] ? parts[1].replace(/\D/g, '') : ''
+    
+    // Formatear parte entera con puntos de miles
+    const parteEnteraFormateada = parteEntera.replace(/\B(?=(\d{3})+(?!\d))/g, '.')
+    
+    // Combinar: parte entera con puntos + coma + parte decimal
+    return parteDecimal ? `${parteEnteraFormateada},${parteDecimal}` : parteEnteraFormateada
+  }
+
+  // Convertir número formateado a número real (remueve puntos de miles y convierte coma a punto)
+  const parseFormattedNumber = (formatted) => {
+    if (!formatted) return 0
+    // Reemplazar puntos (miles) y convertir coma (decimal) a punto
+    const numStr = formatted.toString().replace(/\./g, '').replace(',', '.')
+    return parseFloat(numStr) || 0
+  }
+
+  // Parsear fecha desde string sin problemas de zona horaria
+  const parseFechaString = (fechaStr) => {
+    if (!fechaStr) return null
+    
+    // Si es array [year, month, day] del backend
+    if (Array.isArray(fechaStr)) {
+      const [year, month, day] = fechaStr
+      return new Date(year, month - 1, day)
+    }
+    
+    // Si ya es Date, devolver copia
+    if (fechaStr instanceof Date) {
+      return new Date(fechaStr)
+    }
+    
+    // Si es string, intentar parsear diferentes formatos
+    if (typeof fechaStr === 'string') {
+      // Formato ISO: "YYYY-MM-DD" o "YYYY-MM-DDTHH:mm:ss"
+      if (/^\d{4}-\d{2}-\d{2}/.test(fechaStr)) {
+        const parts = fechaStr.split(/[T\s]/)[0].split('-')
+        const year = parseInt(parts[0], 10)
+        const month = parseInt(parts[1], 10)
+        const day = parseInt(parts[2], 10)
+        return new Date(year, month - 1, day)
+      }
+      
+      // Otros formatos, intentar parsear con Date normal
+      const fecha = new Date(fechaStr)
+      if (!isNaN(fecha.getTime())) {
+        // Si el parseo fue exitoso, crear una nueva fecha solo con año, mes, día
+        // para evitar problemas de zona horaria
+        return new Date(fecha.getFullYear(), fecha.getMonth(), fecha.getDate())
+      }
+    }
+    
+    return null
+  }
+
+  // Formatear fecha a formato YYYY-MM-DD para input date sin problemas de zona horaria
+  const formatFechaParaInput = (fecha) => {
+    if (!fecha) return ''
+    const fechaObj = parseFechaString(fecha)
+    if (!fechaObj || isNaN(fechaObj.getTime())) return ''
+    const year = fechaObj.getFullYear()
+    const month = String(fechaObj.getMonth() + 1).padStart(2, '0')
+    const day = String(fechaObj.getDate()).padStart(2, '0')
+    return `${year}-${month}-${day}`
+  }
+
+  // Calcular monto pendiente hasta una fecha específica
+  const calcularMontoPendienteHastaFecha = (fecha) => {
+    if (!fecha || !cuotas || cuotas.length === 0) return 0
+    
+    // Normalizar la fecha seleccionada - asegurar formato YYYY-MM-DD
+    let fechaSeleccionada
+    if (typeof fecha === 'string') {
+      // Si viene como "YYYY-MM-DD", usar directamente
+      fechaSeleccionada = parseFechaString(fecha)
+    } else if (fecha instanceof Date) {
+      fechaSeleccionada = fecha
+    } else {
+      return 0
+    }
+    
+    if (!fechaSeleccionada || isNaN(fechaSeleccionada.getTime())) return 0
+    
+    // Normalizar a medianoche para comparación justa
+    fechaSeleccionada.setHours(0, 0, 0, 0)
+    const fechaSeleccionadaTimestamp = fechaSeleccionada.getTime()
+    
+    // Filtrar cuotas pendientes que vencen hasta la fecha seleccionada (incluyendo ese día)
+    const cuotasVencidas = cuotas.filter(cuota => {
+      if (cuota.estado === 'PAGADA') return false
+      
+      // Normalizar fecha de vencimiento usando parseFechaString
+      const fechaVencimiento = parseFechaString(cuota.fechaVencimiento)
+      if (!fechaVencimiento || isNaN(fechaVencimiento.getTime())) return false
+      
+      // Normalizar a medianoche para comparación justa
+      fechaVencimiento.setHours(0, 0, 0, 0)
+      const fechaVencimientoTimestamp = fechaVencimiento.getTime()
+      
+      // Incluir cuotas que vencen en o antes de la fecha seleccionada
+      return fechaVencimientoTimestamp <= fechaSeleccionadaTimestamp
+    })
+    
+    // Sumar el monto de las cuotas pendientes hasta esa fecha
+    const montoTotal = cuotasVencidas.reduce((sum, cuota) => {
+      const monto = typeof cuota.monto === 'number' ? cuota.monto : parseFloat(cuota.monto || 0)
+      return sum + monto
+    }, 0)
+    
+    return montoTotal
+  }
+
+  // Efecto para actualizar el monto cuando cambia la fecha y no hay cuota seleccionada
+  useEffect(() => {
+    if (showAbonoModal && !cuotaSeleccionada && !abonoForm.esSoloIntereses && abonoForm.fechaAbono && cuotas.length > 0) {
+      const montoPendiente = calcularMontoPendienteHastaFecha(abonoForm.fechaAbono)
+      if (montoPendiente > 0) {
+        setAbonoForm(prev => ({
+          ...prev,
+          monto: formatNumber(montoPendiente.toString())
+        }))
+      }
+    }
+  }, [showAbonoModal, abonoForm.fechaAbono, cuotas, cuotaSeleccionada, abonoForm.esSoloIntereses])
 
   useEffect(() => {
     fetchPrestamo()
@@ -97,7 +238,8 @@ export default function DetallePrestamo() {
     }
     
     try {
-      const monto = parseFloat(abonoForm.monto)
+      // Convertir el monto formateado a número real
+      const monto = parseFormattedNumber(abonoForm.monto)
       if (isNaN(monto) || monto <= 0) {
         toast.error('El monto debe ser mayor a cero')
         return
@@ -106,7 +248,8 @@ export default function DetallePrestamo() {
       await prestamosService.registrarAbono(id, user.id, {
         monto: monto,
         fechaAbono: abonoForm.fechaAbono,
-        observaciones: abonoForm.observaciones || null
+        observaciones: abonoForm.observaciones || null,
+        esSoloIntereses: abonoForm.esSoloIntereses || false
       })
       
       if (abonoForm.enviarComprobante && prestamo.email) {
@@ -116,6 +259,7 @@ export default function DetallePrestamo() {
       }
       
       setShowAbonoModal(false)
+      setCuotaSeleccionada(null)
       setAbonoForm({ 
         monto: '', 
         fechaAbono: new Date().toISOString().split('T')[0], 
@@ -511,6 +655,7 @@ export default function DetallePrestamo() {
                 enviarComprobante: false,
                 esSoloIntereses: false
               })
+              setCuotaSeleccionada(null)
               setShowAbonoModal(true)
             }}
             className="btn-primary inline-flex items-center space-x-2"
@@ -731,19 +876,20 @@ export default function DetallePrestamo() {
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Vencimiento</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Estado</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Fecha Pago</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Acción</th>
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
               {cuotas.map((cuota) => (
-                <tr key={cuota.id}>
+                <tr key={cuota.id} className={cuota.estado === 'PAGADA' ? 'bg-green-50' : ''}>
                   <td className="px-4 py-3 whitespace-nowrap text-sm font-medium text-gray-900">
                     {cuota.numeroCuota}
                   </td>
                   <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
-                    ${cuota.monto?.toLocaleString('es-CO')}
+                    ${typeof cuota.monto === 'number' ? cuota.monto.toLocaleString('es-CO') : parseFloat(cuota.monto || 0).toLocaleString('es-CO')}
                   </td>
                   <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
-                    {new Date(cuota.fechaVencimiento).toLocaleDateString('es-CO')}
+                    {parseFechaString(cuota.fechaVencimiento)?.toLocaleDateString('es-CO') || '-'}
                   </td>
                   <td className="px-4 py-3 whitespace-nowrap">
                     <span className={`px-2 py-1 rounded text-xs font-medium ${
@@ -757,7 +903,34 @@ export default function DetallePrestamo() {
                     </span>
                   </td>
                   <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
-                    {cuota.fechaPago ? new Date(cuota.fechaPago).toLocaleDateString('es-CO') : '-'}
+                    {cuota.fechaPago ? parseFechaString(cuota.fechaPago)?.toLocaleDateString('es-CO') || '-' : '-'}
+                  </td>
+                  <td className="px-4 py-3 whitespace-nowrap text-sm">
+                    {cuota.estado !== 'PAGADA' && (
+                      <button
+                        onClick={() => {
+                          const montoCuota = typeof cuota.monto === 'number' ? cuota.monto : parseFloat(cuota.monto || 0)
+                          setCuotaSeleccionada(cuota)
+                          
+                          // Debug: ver qué formato tiene la fecha
+                          console.log('Fecha de vencimiento original:', cuota.fechaVencimiento, 'Tipo:', typeof cuota.fechaVencimiento, 'Es array?', Array.isArray(cuota.fechaVencimiento))
+                          const fechaFormateada = cuota.fechaVencimiento ? formatFechaParaInput(cuota.fechaVencimiento) : new Date().toISOString().split('T')[0]
+                          console.log('Fecha formateada para input:', fechaFormateada)
+                          
+                          setAbonoForm({
+                            monto: formatNumber(montoCuota.toString()),
+                            fechaAbono: fechaFormateada,
+                            observaciones: `Pago cuota #${cuota.numeroCuota}`,
+                            enviarComprobante: false,
+                            esSoloIntereses: false
+                          })
+                          setShowAbonoModal(true)
+                        }}
+                        className="text-primary-600 hover:text-primary-700 font-medium hover:underline"
+                      >
+                        Pagar
+                      </button>
+                    )}
                   </td>
                 </tr>
               ))}
@@ -803,22 +976,80 @@ export default function DetallePrestamo() {
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-start z-50 p-4 lg:pl-8 lg:justify-start">
           <div className="bg-white rounded-lg max-w-2xl w-full p-6 lg:p-8">
             <h2 className="text-2xl font-bold text-gray-900 mb-4">
-              {abonoForm.esSoloIntereses ? 'Registrar Pago de Intereses' : 'Registrar Abono'}
+              {abonoForm.esSoloIntereses ? 'Registrar Pago de Intereses' : cuotaSeleccionada ? `Registrar Abono - Cuota #${cuotaSeleccionada.numeroCuota}` : 'Registrar Abono'}
             </h2>
+            {cuotaSeleccionada && (
+              <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                <p className="text-sm text-blue-800">
+                  💡 Monto de la cuota #{cuotaSeleccionada.numeroCuota}: ${typeof cuotaSeleccionada.monto === 'number' ? cuotaSeleccionada.monto.toLocaleString('es-CO') : parseFloat(cuotaSeleccionada.monto || 0).toLocaleString('es-CO')}
+                  <br />
+                  Puedes modificar el monto si el cliente pagó una cantidad diferente.
+                </p>
+              </div>
+            )}
+            {!cuotaSeleccionada && !abonoForm.esSoloIntereses && abonoForm.fechaAbono && cuotas.length > 0 && (() => {
+              // Normalizar la fecha seleccionada
+              const fechaSeleccionada = parseFechaString(abonoForm.fechaAbono)
+              if (!fechaSeleccionada || isNaN(fechaSeleccionada.getTime())) return null
+              
+              fechaSeleccionada.setHours(0, 0, 0, 0)
+              const fechaSeleccionadaTimestamp = fechaSeleccionada.getTime()
+              
+              const cuotasVencidas = cuotas.filter(cuota => {
+                if (cuota.estado === 'PAGADA') return false
+                
+                // Normalizar fecha de vencimiento usando parseFechaString
+                const fechaVencimiento = parseFechaString(cuota.fechaVencimiento)
+                if (!fechaVencimiento || isNaN(fechaVencimiento.getTime())) return false
+                
+                fechaVencimiento.setHours(0, 0, 0, 0)
+                const fechaVencimientoTimestamp = fechaVencimiento.getTime()
+                return fechaVencimientoTimestamp <= fechaSeleccionadaTimestamp
+              })
+              
+              if (cuotasVencidas.length > 0) {
+                const montoCalculado = cuotasVencidas.reduce((sum, cuota) => {
+                  const monto = typeof cuota.monto === 'number' ? cuota.monto : parseFloat(cuota.monto || 0)
+                  return sum + monto
+                }, 0)
+                
+                return (
+                  <div className="mb-4 p-3 bg-green-50 border border-green-200 rounded-lg">
+                    <p className="text-sm text-green-800 font-medium mb-2">
+                      💰 Monto calculado automáticamente según la fecha seleccionada
+                    </p>
+                    <p className="text-xs text-green-700">
+                      Se incluyen {cuotasVencidas.length} {cuotasVencidas.length === 1 ? 'cuota pendiente' : 'cuotas pendientes'} hasta el {parseFechaString(abonoForm.fechaAbono)?.toLocaleDateString('es-CO') || abonoForm.fechaAbono}
+                      <br />
+                      Cuotas incluidas: {cuotasVencidas.map(c => `#${c.numeroCuota}`).join(', ')}
+                      <br />
+                      <span className="font-semibold">Total calculado: ${montoCalculado.toLocaleString('es-CO')}</span>
+                      <br />
+                      Puedes modificar el monto si el cliente pagó una cantidad diferente.
+                    </p>
+                  </div>
+                )
+              }
+              return null
+            })()}
             <form onSubmit={handleRegistrarAbono} className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   Monto *
                 </label>
                 <input
-                  type="number"
+                  type="text"
                   value={abonoForm.monto}
-                  onChange={(e) => setAbonoForm({ ...abonoForm, monto: e.target.value })}
+                  onChange={(e) => {
+                    const value = e.target.value
+                    // Permitir números, puntos (miles) y comas (decimales)
+                    const formatted = formatNumber(value)
+                    setAbonoForm({ ...abonoForm, monto: formatted })
+                  }}
                   className="input-field"
                   required
-                  min="1"
-                  step="0.01"
-                  placeholder="50000"
+                  placeholder="1.493.192,78"
+                  inputMode="numeric"
                 />
               </div>
 
@@ -829,10 +1060,52 @@ export default function DetallePrestamo() {
                 <input
                   type="date"
                   value={abonoForm.fechaAbono}
-                  onChange={(e) => setAbonoForm({ ...abonoForm, fechaAbono: e.target.value })}
+                  onChange={(e) => {
+                    const nuevaFecha = e.target.value
+                    // Si no hay cuota seleccionada y no es solo intereses, calcular monto automáticamente
+                    if (!cuotaSeleccionada && !abonoForm.esSoloIntereses && cuotas.length > 0) {
+                      const montoPendiente = calcularMontoPendienteHastaFecha(nuevaFecha)
+                      setAbonoForm({
+                        ...abonoForm,
+                        fechaAbono: nuevaFecha,
+                        monto: montoPendiente > 0 ? formatNumber(montoPendiente.toString()) : ''
+                      })
+                    } else {
+                      setAbonoForm({ ...abonoForm, fechaAbono: nuevaFecha })
+                    }
+                  }}
                   className="input-field"
                   required
                 />
+                {!cuotaSeleccionada && !abonoForm.esSoloIntereses && abonoForm.fechaAbono && cuotas.length > 0 && (() => {
+                  // Normalizar la fecha seleccionada
+                  const fechaSeleccionada = parseFechaString(abonoForm.fechaAbono)
+                  if (!fechaSeleccionada || isNaN(fechaSeleccionada.getTime())) return null
+                  
+                  fechaSeleccionada.setHours(0, 0, 0, 0)
+                  const fechaSeleccionadaTimestamp = fechaSeleccionada.getTime()
+                  
+                  const cuotasVencidas = cuotas.filter(cuota => {
+                    if (cuota.estado === 'PAGADA') return false
+                    
+                    // Normalizar fecha de vencimiento usando parseFechaString
+                    const fechaVencimiento = parseFechaString(cuota.fechaVencimiento)
+                    if (!fechaVencimiento || isNaN(fechaVencimiento.getTime())) return false
+                    
+                    fechaVencimiento.setHours(0, 0, 0, 0)
+                    const fechaVencimientoTimestamp = fechaVencimiento.getTime()
+                    return fechaVencimientoTimestamp <= fechaSeleccionadaTimestamp
+                  })
+                  
+                  if (cuotasVencidas.length > 0) {
+                    return (
+                      <p className="mt-1 text-xs text-gray-600">
+                        💡 Monto calculado según {cuotasVencidas.length} {cuotasVencidas.length === 1 ? 'cuota pendiente' : 'cuotas pendientes'} hasta esta fecha
+                      </p>
+                    )
+                  }
+                  return null
+                })()}
               </div>
 
               <div>
@@ -892,6 +1165,7 @@ export default function DetallePrestamo() {
                   type="button"
                   onClick={() => {
                     setShowAbonoModal(false)
+                    setCuotaSeleccionada(null)
                     setAbonoForm({
                       monto: '',
                       fechaAbono: new Date().toISOString().split('T')[0],

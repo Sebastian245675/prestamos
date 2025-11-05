@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, useEffect } from 'react'
-import axios from 'axios'
+import api from '../utils/api'
+import { useAuth } from './AuthContext'
 
 const NotificationContext = createContext()
 
@@ -12,20 +13,31 @@ export const useNotifications = () => {
 }
 
 export const NotificationProvider = ({ children }) => {
+  const { user } = useAuth()
   const [notifications, setNotifications] = useState([])
   const [unreadCount, setUnreadCount] = useState(0)
 
   useEffect(() => {
-    fetchNotifications()
-    // Simular nuevas notificaciones cada cierto tiempo
-    const interval = setInterval(() => {
+    if (user) {
       fetchNotifications()
-    }, 30000) // Cada 30 segundos
+      // Simular nuevas notificaciones cada cierto tiempo solo si hay usuario autenticado
+      const interval = setInterval(() => {
+        if (user) {
+          fetchNotifications()
+        }
+      }, 30000) // Cada 30 segundos
 
-    return () => clearInterval(interval)
-  }, [])
+      return () => clearInterval(interval)
+    } else {
+      // Si no hay usuario, limpiar notificaciones
+      setNotifications([])
+      setUnreadCount(0)
+    }
+  }, [user])
 
   const fetchNotifications = async () => {
+    if (!user) return
+    
     try {
       // Mock notifications
       const mockNotifications = [
@@ -68,14 +80,16 @@ export const NotificationProvider = ({ children }) => {
       ]
 
       try {
-        const response = await axios.get('/api/notificaciones')
-        setNotifications(response.data)
+        const response = await api.get('/notificaciones')
+        setNotifications(response.data || mockNotifications)
       } catch (e) {
+        // Si falla la petición, usar notificaciones mock
         setNotifications(mockNotifications)
       }
 
       // Calcular no leídas
-      const unread = mockNotifications.filter(n => !n.read).length
+      const currentNotifications = notifications.length > 0 ? notifications : mockNotifications
+      const unread = currentNotifications.filter(n => !n.read).length
       setUnreadCount(unread)
     } catch (error) {
       console.error('Error al cargar notificaciones')

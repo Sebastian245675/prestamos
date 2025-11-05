@@ -38,7 +38,7 @@ public class Cuota {
     @Column(nullable = false)
     private LocalDate fechaVencimiento;
     
-    @Column(nullable = false)
+    @Column
     private LocalDate fechaPago;
     
     @Enumerated(EnumType.STRING)

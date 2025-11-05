@@ -34,33 +34,51 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
             throws ServletException, IOException {
         
+        // Permitir rutas públicas sin verificar token
+        String path = request.getRequestURI();
+        if (path.startsWith("/api/auth/") || path.startsWith("/api/public/")) {
+            filterChain.doFilter(request, response);
+            return;
+        }
+        
         try {
             String jwt = getJwtFromRequest(request);
             
-            if (StringUtils.hasText(jwt) && jwtUtil.validateToken(jwt)) {
-                String email = jwtUtil.getEmailFromToken(jwt);
-                
-                // Crear autenticación
-                UsernamePasswordAuthenticationToken authentication = 
-                    new UsernamePasswordAuthenticationToken(
-                        email, 
-                        null, 
-                        Collections.singletonList(new SimpleGrantedAuthority("ROLE_USER"))
-                    );
-                authentication.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
-                
-                SecurityContextHolder.getContext().setAuthentication(authentication);
-                
-                log.debug("JWT válido para usuario: {}", email);
-            } else if (StringUtils.hasText(jwt)) {
-                log.warn("JWT inválido recibido desde IP: {}", getClientIp(request));
-                sendErrorResponse(response, "Token inválido o expirado", HttpStatus.UNAUTHORIZED);
-                return;
+            if (StringUtils.hasText(jwt)) {
+                try {
+                    if (jwtUtil.validateToken(jwt)) {
+                        String email = jwtUtil.getEmailFromToken(jwt);
+                        
+                        // Crear autenticación
+                        UsernamePasswordAuthenticationToken authentication = 
+                            new UsernamePasswordAuthenticationToken(
+                                email, 
+                                null, 
+                                Collections.singletonList(new SimpleGrantedAuthority("ROLE_USER"))
+                            );
+                        authentication.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
+                        
+                        SecurityContextHolder.getContext().setAuthentication(authentication);
+                        
+                        log.info("JWT válido para usuario: {} en ruta: {}", email, path);
+                    } else {
+                        log.warn("JWT inválido recibido desde IP: {} en ruta: {}", getClientIp(request), path);
+                        sendErrorResponse(response, "Token inválido o expirado", HttpStatus.UNAUTHORIZED);
+                        return;
+                    }
+                } catch (Exception tokenEx) {
+                    log.error("Error al procesar token JWT en ruta {}: {}", path, tokenEx.getMessage());
+                    sendErrorResponse(response, "Token inválido o expirado", HttpStatus.UNAUTHORIZED);
+                    return;
+                }
+            } else {
+                log.warn("No se encontró token JWT en la petición a ruta: {}", path);
             }
+            // Si no hay token, dejar que Spring Security maneje la autorización
         } catch (Exception ex) {
-            log.error("Error al validar token JWT: {}", ex.getMessage());
-            sendErrorResponse(response, "Error al procesar la autenticación", HttpStatus.UNAUTHORIZED);
-            return;
+            log.error("Error inesperado en filtro JWT en ruta {}: {}", path, ex.getMessage(), ex);
+            // En caso de error inesperado, dejar que Spring Security maneje la autorización
+            // No bloquear la petición para evitar que el servidor se caiga
         }
         
         filterChain.doFilter(request, response);

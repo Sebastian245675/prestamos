@@ -1,5 +1,6 @@
 package com.prestamos.entity;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Data;
@@ -83,9 +84,11 @@ public class Prestamo {
     private String zona;
     
     @OneToMany(mappedBy = "prestamo", cascade = CascadeType.ALL)
+    @JsonIgnore
     private List<Abono> abonos;
     
     @OneToMany(mappedBy = "prestamo", cascade = CascadeType.ALL)
+    @JsonIgnore
     private List<Cuota> cuotas;
     
     @Column(nullable = false)
