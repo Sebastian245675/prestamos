@@ -1,0 +1,105 @@
+package com.prestamos.controller;
+
+import com.prestamos.config.SecurityUtils;
+import com.prestamos.entity.Notificacion;
+import com.prestamos.service.NotificacionService;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.*;
+
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
+
+@RestController
+@RequestMapping("/notificaciones")
+@RequiredArgsConstructor
+@Slf4j
+public class NotificacionController {
+    
+    private final SecurityUtils securityUtils;
+    private final NotificacionService notificacionService;
+    
+    @GetMapping
+    public ResponseEntity<?> obtenerNotificaciones() {
+        try {
+            Long usuarioId = securityUtils.getCurrentUserId()
+                .orElseThrow(() -> new RuntimeException("Usuario no autenticado"));
+            
+            List<Notificacion> notificaciones = notificacionService.obtenerNotificaciones(usuarioId);
+            
+            // Convertir a formato esperado por el frontend
+            List<Map<String, Object>> notificacionesDTO = notificaciones.stream()
+                .map(this::convertToDTO)
+                .collect(Collectors.toList());
+            
+            return ResponseEntity.ok(notificacionesDTO);
+            
+        } catch (Exception e) {
+            log.error("Error al obtener notificaciones: {}", e.getMessage());
+            return ResponseEntity.ok(List.of());
+        }
+    }
+    
+    @GetMapping("/count")
+    public ResponseEntity<?> contarNoLeidas() {
+        try {
+            Long usuarioId = securityUtils.getCurrentUserId()
+                .orElseThrow(() -> new RuntimeException("Usuario no autenticado"));
+            
+            Long count = notificacionService.contarNoLeidas(usuarioId);
+            return ResponseEntity.ok(Map.of("count", count));
+            
+        } catch (Exception e) {
+            log.error("Error al contar notificaciones no leídas: {}", e.getMessage());
+            return ResponseEntity.ok(Map.of("count", 0));
+        }
+    }
+    
+    @PutMapping("/{id}/read")
+    public ResponseEntity<?> marcarComoLeida(@PathVariable Long id) {
+        try {
+            Long usuarioId = securityUtils.getCurrentUserId()
+                .orElseThrow(() -> new RuntimeException("Usuario no autenticado"));
+            
+            notificacionService.marcarComoLeida(id, usuarioId);
+            return ResponseEntity.ok(Map.of("success", true));
+            
+        } catch (Exception e) {
+            log.error("Error al marcar notificación como leída: {}", e.getMessage());
+            return ResponseEntity.badRequest()
+                .body(Map.of("error", true, "message", e.getMessage()));
+        }
+    }
+    
+    @PutMapping("/read-all")
+    public ResponseEntity<?> marcarTodasComoLeidas() {
+        try {
+            Long usuarioId = securityUtils.getCurrentUserId()
+                .orElseThrow(() -> new RuntimeException("Usuario no autenticado"));
+            
+            notificacionService.marcarTodasComoLeidas(usuarioId);
+            return ResponseEntity.ok(Map.of("success", true));
+            
+        } catch (Exception e) {
+            log.error("Error al marcar todas las notificaciones como leídas: {}", e.getMessage());
+            return ResponseEntity.badRequest()
+                .body(Map.of("error", true, "message", e.getMessage()));
+        }
+    }
+    
+    private Map<String, Object> convertToDTO(Notificacion notificacion) {
+        Map<String, Object> dto = new HashMap<>();
+        dto.put("id", notificacion.getId());
+        dto.put("type", notificacion.getTipo());
+        dto.put("title", notificacion.getTitulo());
+        dto.put("message", notificacion.getMensaje());
+        dto.put("read", notificacion.getLeida());
+        dto.put("link", notificacion.getLink());
+        dto.put("fecha", notificacion.getFechaCreacion().toString());
+        return dto;
+    }
+}
+

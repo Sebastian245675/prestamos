@@ -39,73 +39,56 @@ export const NotificationProvider = ({ children }) => {
     if (!user) return
     
     try {
-      // Mock notifications
-      const mockNotifications = [
-        {
-          id: 1,
-          type: 'warning',
-          title: 'Préstamo Vencido',
-          message: 'El préstamo de Juan Pérez está vencido',
-          fecha: new Date().toISOString(),
-          read: false,
-          link: '/prestamos/1'
-        },
-        {
-          id: 2,
-          type: 'info',
-          title: 'Recordatorio de Cobro',
-          message: 'Tienes 3 cobros programados para hoy',
-          fecha: new Date(Date.now() - 3600000).toISOString(),
-          read: false,
-          link: '/calendario'
-        },
-        {
-          id: 3,
-          type: 'success',
-          title: 'Abono Registrado',
-          message: 'Se registró un abono de $100.000',
-          fecha: new Date(Date.now() - 7200000).toISOString(),
-          read: true,
-          link: '/prestamos'
-        },
-        {
-          id: 4,
-          type: 'warning',
-          title: 'Suscripción Próxima a Vencer',
-          message: 'Tu suscripción vence en 5 días',
-          fecha: new Date(Date.now() - 86400000).toISOString(),
-          read: false,
-          link: '/dashboard'
-        }
-      ]
-
-      try {
-        const response = await api.get('/notificaciones')
-        setNotifications(response.data || mockNotifications)
-      } catch (e) {
-        // Si falla la petición, usar notificaciones mock
-        setNotifications(mockNotifications)
-      }
-
+      const response = await api.get('/notificaciones')
+      const notificaciones = response.data || []
+      
+      // Convertir fecha de string a Date si es necesario
+      const notificacionesFormateadas = notificaciones.map(n => ({
+        ...n,
+        fecha: n.fecha || new Date().toISOString()
+      }))
+      
+      setNotifications(notificacionesFormateadas)
+      
       // Calcular no leídas
-      const currentNotifications = notifications.length > 0 ? notifications : mockNotifications
-      const unread = currentNotifications.filter(n => !n.read).length
+      const unread = notificacionesFormateadas.filter(n => !n.read).length
       setUnreadCount(unread)
     } catch (error) {
-      console.error('Error al cargar notificaciones')
+      console.error('Error al cargar notificaciones:', error)
+      // En caso de error, mantener las notificaciones existentes
     }
   }
 
-  const markAsRead = (id) => {
+  const markAsRead = async (id) => {
+    // Optimistic update
     setNotifications(notifications.map(n => 
       n.id === id ? { ...n, read: true } : n
     ))
     setUnreadCount(Math.max(0, unreadCount - 1))
+    
+    // Actualizar en el backend
+    try {
+      await api.put(`/notificaciones/${id}/read`)
+    } catch (error) {
+      console.error('Error al marcar notificación como leída:', error)
+      // Revertir si falla
+      fetchNotifications()
+    }
   }
 
-  const markAllAsRead = () => {
+  const markAllAsRead = async () => {
+    // Optimistic update
     setNotifications(notifications.map(n => ({ ...n, read: true })))
     setUnreadCount(0)
+    
+    // Actualizar en el backend
+    try {
+      await api.put('/notificaciones/read-all')
+    } catch (error) {
+      console.error('Error al marcar todas como leídas:', error)
+      // Revertir si falla
+      fetchNotifications()
+    }
   }
 
   const deleteNotification = (id) => {

@@ -43,16 +43,54 @@ export default function NuevoPrestamo() {
   const [imagenPreview, setImagenPreview] = useState(null)
   const [archivos, setArchivos] = useState([])
 
-  // Formatear número con separadores de miles
+  // Formatear número con separadores de miles (punto) y decimales (coma) - Formato COP
   const formatNumber = (num) => {
     if (!num) return ''
-    const numStr = num.toString().replace(/\D/g, '')
-    return numStr.replace(/\B(?=(\d{3})+(?!\d))/g, '.')
+    
+    // Permitir números, puntos y comas
+    let numStr = num.toString().replace(/[^\d.,]/g, '')
+    
+    // Si el último punto está seguido de 1-2 dígitos al final, es un decimal (formato internacional)
+    // Convertirlo a coma (formato colombiano)
+    const lastDotIndex = numStr.lastIndexOf('.')
+    const lastCommaIndex = numStr.lastIndexOf(',')
+    
+    // Si hay un punto al final con 1-2 dígitos después, convertir a coma
+    if (lastDotIndex !== -1 && lastDotIndex > lastCommaIndex) {
+      const afterDot = numStr.substring(lastDotIndex + 1)
+      // Si después del punto hay 1-2 dígitos y no hay más puntos después, es un decimal
+      if (afterDot.length <= 2 && !afterDot.includes('.') && !numStr.substring(lastDotIndex + 1).includes(',')) {
+        numStr = numStr.substring(0, lastDotIndex) + ',' + afterDot
+      }
+    }
+    
+    // Si hay múltiples comas, mantener solo la primera
+    const commaIndex = numStr.indexOf(',')
+    if (commaIndex !== -1) {
+      numStr = numStr.substring(0, commaIndex + 1) + numStr.substring(commaIndex + 1).replace(/,/g, '')
+    }
+    
+    // Separar parte entera y decimal
+    const parts = numStr.split(',')
+    let integerPart = parts[0].replace(/\./g, '') // Eliminar puntos existentes
+    const decimalPart = parts[1] || ''
+    
+    // Limitar decimales a 2 dígitos
+    const limitedDecimal = decimalPart.substring(0, 2)
+    
+    // Formatear parte entera con puntos como separadores de miles
+    integerPart = integerPart.replace(/\B(?=(\d{3})+(?!\d))/g, '.')
+    
+    // Combinar parte entera y decimal
+    return limitedDecimal ? `${integerPart},${limitedDecimal}` : integerPart
   }
 
-  // Convertir número formateado a número real
+  // Convertir número formateado a número real (formato COP: 1.000.000,50)
   const parseFormattedNumber = (formatted) => {
-    return parseFloat(formatted.replace(/\./g, '')) || 0
+    if (!formatted) return 0
+    // Reemplazar punto (miles) por nada y coma (decimal) por punto
+    const numStr = formatted.replace(/\./g, '').replace(',', '.')
+    return parseFloat(numStr) || 0
   }
 
   // Calcular fecha final basada en frecuencia y cuotas
@@ -457,11 +495,12 @@ export default function NuevoPrestamo() {
                         onChange={handleChange}
                         className="input-field h-12 text-base pl-7"
                         required
-                        placeholder="1.000.000"
+                        placeholder="1.000.000,50"
+                        inputMode="decimal"
                       />
                     </div>
                     <p className="text-xs text-gray-500 mt-1">
-                      Escribe el monto y verás puntuación automática (1.000, 1.000.000...).
+                      Escribe el monto y verás formato automático. Usa coma (,) para decimales. Ejemplo: 1.000.000,50
                     </p>
                   </div>
 

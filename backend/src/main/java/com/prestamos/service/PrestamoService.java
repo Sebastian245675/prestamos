@@ -27,6 +27,7 @@ public class PrestamoService {
     private final AbonoRepository abonoRepository;
     private final CuotaRepository cuotaRepository;
     private final ReferidoService referidoService;
+    // private final NotificacionService notificacionService; // Temporalmente comentado hasta resolver Lombok
     
     @Transactional
     public Prestamo crearPrestamo(Long prestamistaId, PrestamoRequest request) {
@@ -289,6 +290,18 @@ public class PrestamoService {
         
         // Sincronizar todas las cuotas basándose en todos los abonos registrados
         sincronizarCuotasConAbonos(prestamo);
+        
+        // Crear notificación de abono registrado (temporalmente comentado hasta resolver Lombok)
+        // try {
+        //     notificacionService.notificarAbonoRegistrado(
+        //         prestamo.getPrestamista().getId(),
+        //         prestamo.getId(),
+        //         request.getMonto(),
+        //         prestamo.getNombreCliente()
+        //     );
+        // } catch (Exception e) {
+        //     log.warn("Error al crear notificación de abono: {}", e.getMessage());
+        // }
         
         log.info("Abono registrado: ID {} de {} para préstamo {}", 
             abono.getId(), request.getMonto(), prestamoId);

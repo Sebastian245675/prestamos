@@ -6,7 +6,7 @@ import org.springframework.cache.annotation.EnableCaching;
 import org.springframework.scheduling.annotation.EnableScheduling;
 
 @SpringBootApplication
-@EnableScheduling
+// @EnableScheduling // Temporalmente comentado hasta restaurar NotificacionService
 @EnableCaching
 public class PrestacolApplication {
     public static void main(String[] args) {
