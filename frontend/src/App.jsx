@@ -9,6 +9,7 @@ import DetallePrestamo from './pages/DetallePrestamo'
 import Calendario from './pages/Calendario'
 import Reportes from './pages/Reportes'
 import Cobradores from './pages/Cobradores'
+import LiquidacionCobradores from './pages/LiquidacionCobradores'
 import Movimientos from './pages/Movimientos'
 import Clientes from './pages/Clientes'
 import DetalleCliente from './pages/DetalleCliente'
@@ -46,6 +47,7 @@ function AppRoutes() {
           <Route path="/calendario" element={<ProtectedRoute permiso="verCalendario"><Calendario /></ProtectedRoute>} />
           <Route path="/reportes" element={<ProtectedRoute permiso="verReportes"><Reportes /></ProtectedRoute>} />
           <Route path="/cobradores" element={<ProtectedRoute soloPrestamista><Cobradores /></ProtectedRoute>} />
+          <Route path="/cobradores/liquidacion" element={<ProtectedRoute soloPrestamista><LiquidacionCobradores /></ProtectedRoute>} />
           <Route path="/movimientos" element={<ProtectedRoute permiso="verPrestamos"><Movimientos /></ProtectedRoute>} />
           <Route path="/clientes" element={<ProtectedRoute permiso="gestionarClientes"><Clientes /></ProtectedRoute>} />
           <Route path="/clientes/:id" element={<ProtectedRoute permiso="gestionarClientes"><DetalleCliente /></ProtectedRoute>} />

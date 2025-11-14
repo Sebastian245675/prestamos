@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { toast } from 'react-toastify'
-import { Plus, Search, Filter, DollarSign, Calendar, MapPin, X } from 'lucide-react'
+import { Plus, Search, Filter, DollarSign, Calendar, MapPin, X, Download } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import { prestamosService } from '../services/prestamosService'
 import api from '../utils/api'
@@ -100,6 +100,239 @@ export default function Prestamos() {
     return matchesSearch && matchesEstado
   })
 
+  const exportarPrestamosPorEstado = async () => {
+    const prestamosPorEstado = filteredPrestamos.filter(p => filterEstado === 'TODOS' || p.estado === filterEstado)
+
+    if (prestamosPorEstado.length === 0) {
+      toast.info('No hay préstamos para exportar en este estado')
+      return
+    }
+
+    try {
+      const jspdfModule = await import('jspdf')
+      const jsPDFClass = jspdfModule.jsPDF || (jspdfModule.default && (jspdfModule.default.jsPDF || jspdfModule.default)) || jspdfModule.default
+
+      if (!jsPDFClass) {
+        throw new Error('MODULE_NOT_FOUND')
+      }
+
+      const doc = new jsPDFClass({
+        orientation: 'landscape',
+        unit: 'mm',
+        format: 'a4'
+      })
+
+      const marginX = 14
+      const marginY = 20
+      const pageWidth = doc.internal.pageSize.getWidth()
+      const pageHeight = doc.internal.pageSize.getHeight()
+      const contentWidth = pageWidth - marginX * 2
+      const lineHeight = 4.2
+
+      const estadoTitulo = filterEstado === 'TODOS' ? 'Todos los estados' : filterEstado
+      const generadoPor = user?.nombreCompleto || user?.email || 'Usuario no identificado'
+
+      const drawHeader = () => {
+        doc.setFillColor(23, 37, 84)
+        doc.rect(marginX, marginY - 22, contentWidth, 30, 'F')
+
+        doc.setTextColor(255, 255, 255)
+        doc.setFont('helvetica', 'bold')
+        doc.setFontSize(22)
+        doc.text('REPORTE DE PRÉSTAMOS', marginX + 10, marginY - 10)
+
+        doc.setFont('helvetica', 'medium')
+        doc.setFontSize(12)
+        doc.text(`Estado: ${estadoTitulo}`, marginX + 10, marginY - 4)
+
+        doc.setFont('helvetica', 'normal')
+        doc.setFontSize(10)
+        const headerInfo = [
+          `Generado: ${new Date().toLocaleDateString('es-CO')}`,
+          `Generado por: ${generadoPor}`,
+          `Total registros: ${prestamosPorEstado.length}`
+        ]
+
+        headerInfo.forEach((text, idx) => {
+          doc.text(text, pageWidth - marginX - 10, marginY - 12 + (idx * 6), { align: 'right' })
+        })
+
+        doc.setDrawColor(148, 163, 184)
+        doc.setLineWidth(0.5)
+        doc.line(marginX, marginY + 7, marginX + contentWidth, marginY + 7)
+      }
+
+      const columns = [
+        { title: 'Cliente', width: 42, align: 'left' },
+        { title: 'Préstamo', width: 30, align: 'right' },
+        { title: 'Saldo', width: 30, align: 'right' },
+        { title: 'Cuotas', width: 28, align: 'center' },
+        { title: 'Frecuencia', width: 32, align: 'left' },
+        { title: 'Zona', width: 28, align: 'left' },
+        { title: 'Vencimiento', width: 32, align: 'left' },
+        { title: 'Estado', width: 32, align: 'left' }
+      ]
+
+      let currentX = marginX
+      columns.forEach((col) => {
+        col.x = currentX
+        currentX += col.width
+      })
+
+      const drawTableHeader = (startY) => {
+        doc.setFillColor(226, 232, 240)
+        doc.rect(marginX, startY - 7, currentX - marginX, 9, 'F')
+        doc.setDrawColor(203, 213, 225)
+        doc.rect(marginX, startY - 7, currentX - marginX, 9)
+        doc.setTextColor(30, 41, 59)
+        doc.setFont('helvetica', 'bold')
+        doc.setFontSize(10)
+
+        columns.forEach((col, idx) => {
+          const textX = col.align === 'right'
+            ? col.x + col.width - 2
+            : col.align === 'center'
+              ? col.x + col.width / 2
+              : col.x + 2
+          const options = col.align === 'right'
+            ? { align: 'right' }
+            : col.align === 'center'
+              ? { align: 'center' }
+              : undefined
+          doc.text(col.title.toUpperCase(), textX, startY - 1.5, options)
+
+          if (idx < columns.length - 1) {
+            const nextX = col.x + col.width
+            doc.line(nextX, startY - 7, nextX, startY + 2)
+          }
+        })
+      }
+
+      const getRowData = (prestamo) => ([
+        `${prestamo.nombreCliente}\n${prestamo.telefono}`,
+        `$${prestamo.montoPrestado.toLocaleString('es-CO')}`,
+        `$${prestamo.saldoPendiente.toLocaleString('es-CO')}`,
+        `${prestamo.cuotasPagadas}/${prestamo.numeroCuotas}`,
+        prestamo.frecuenciaPago,
+        prestamo.zona || 'Sin zona',
+        new Date(prestamo.fechaVencimiento).toLocaleDateString('es-CO'),
+        prestamo.estado
+      ])
+
+      const drawSummary = (startY) => {
+        const totalMonto = prestamosPorEstado.reduce((sum, p) => sum + p.montoPrestado, 0)
+        const totalSaldo = prestamosPorEstado.reduce((sum, p) => sum + p.saldoPendiente, 0)
+
+        const cards = [
+          { label: 'Préstamos listados', value: prestamosPorEstado.length },
+          { label: 'Total prestado', value: totalMonto },
+          { label: 'Saldo pendiente', value: totalSaldo }
+        ]
+
+        const cardWidth = (contentWidth - 10) / cards.length
+
+        cards.forEach((card, idx) => {
+          const x = marginX + idx * (cardWidth + 5)
+          doc.setFillColor(255, 255, 255)
+          doc.roundedRect(x, startY, cardWidth, 28, 3, 3, 'F')
+          doc.setDrawColor(226, 232, 240)
+          doc.roundedRect(x, startY, cardWidth, 28, 3, 3)
+
+          doc.setFillColor(226, 232, 240)
+          doc.roundedRect(x, startY, cardWidth, 10, 3, 3, 'F')
+
+          doc.setTextColor(15, 23, 42)
+          doc.setFont('helvetica', 'bold')
+          doc.setFontSize(9.5)
+          doc.text(card.label.toUpperCase(), x + 4, startY + 6)
+
+          doc.setTextColor(30, 41, 59)
+          doc.setFont('helvetica', 'bold')
+
+          if (typeof card.value === 'number') {
+            const text = `$${card.value.toLocaleString('es-CO')}`
+            doc.setFontSize(13)
+            const lines = doc.splitTextToSize(text, cardWidth - 8)
+            lines.forEach((line, lineIdx) => {
+              doc.text(line, x + 4, startY + 18 + (lineIdx * 6))
+            })
+          } else {
+            doc.setFontSize(14)
+            doc.text(String(card.value), x + 4, startY + 18)
+          }
+        })
+
+        return startY + 38
+      }
+
+      drawHeader()
+
+      let currentY = drawSummary(marginY + 6)
+      currentY += 10
+      drawTableHeader(currentY)
+      currentY += 4
+
+      prestamosPorEstado.forEach((prestamo, index) => {
+        const rowValues = getRowData(prestamo).map((value, idx) =>
+          doc.splitTextToSize(String(value), columns[idx].width - 4)
+        )
+
+        const rowHeight = Math.max(...rowValues.map((lines) => lines.length)) * lineHeight + 1.5
+
+        if (currentY + rowHeight > pageHeight - marginY) {
+          doc.addPage()
+          drawHeader()
+          currentY = drawSummary(marginY + 6)
+          currentY += 10
+          drawTableHeader(currentY)
+          currentY += 4
+        }
+
+        if (index % 2 === 0) {
+          doc.setFillColor(250, 250, 250)
+          doc.rect(marginX, currentY - 3, currentX - marginX, rowHeight + 1, 'F')
+        }
+
+        doc.setDrawColor(209, 213, 219)
+        doc.rect(marginX, currentY - 3, currentX - marginX, rowHeight + 1)
+
+        columns.forEach((col, colIdx) => {
+          if (colIdx < columns.length - 1) {
+            const dividerX = col.x + col.width
+            doc.line(dividerX, currentY - 3, dividerX, currentY - 3 + rowHeight + 1)
+          }
+
+          doc.setTextColor(30, 41, 59)
+          doc.setFont('helvetica', 'normal')
+          doc.setFontSize(9.5)
+
+          rowValues[colIdx].forEach((line, lineIdx) => {
+            const textY = currentY + (lineIdx * lineHeight)
+            if (col.align === 'right') {
+              doc.text(line, col.x + col.width - 3, textY, { align: 'right' })
+            } else if (col.align === 'center') {
+              doc.text(line, col.x + col.width / 2, textY, { align: 'center' })
+            } else {
+              doc.text(line, col.x + 3, textY)
+            }
+          })
+        })
+
+        currentY += rowHeight
+      })
+
+      const fileSuffix = filterEstado === 'TODOS' ? 'todos' : filterEstado.toLowerCase()
+      doc.save(`prestamos_${fileSuffix}_${new Date().toISOString().slice(0, 10)}.pdf`)
+    } catch (error) {
+      console.error('Error exportando PDF de préstamos:', error)
+      if (error.message === 'MODULE_NOT_FOUND') {
+        toast.error('No se pudo cargar la librería para exportar PDF')
+      } else {
+        toast.error('Error al exportar la lista de préstamos')
+      }
+    }
+  }
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -117,6 +350,13 @@ export default function Prestamos() {
           <p className="text-gray-600 mt-1">Gestiona todos tus préstamos</p>
         </div>
         <div className="flex gap-2">
+          <button
+            onClick={exportarPrestamosPorEstado}
+            className="btn-secondary inline-flex items-center space-x-2"
+          >
+            <Download size={20} />
+            <span>Exportar {filterEstado === 'TODOS' ? 'todos' : filterEstado.toLowerCase()}</span>
+          </button>
           <button
             onClick={() => setShowRutaModal(true)}
             className="btn-secondary inline-flex items-center space-x-2"

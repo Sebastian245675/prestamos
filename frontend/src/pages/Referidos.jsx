@@ -206,45 +206,53 @@ export default function Referidos() {
     <div className="space-y-6">
       {/* Header */}
       <div>
-        <h1 className="text-3xl font-bold text-gray-900">Programa de Referidos</h1>
-        <p className="text-gray-600 mt-1">Comparte tu código y gana recompensas</p>
+        <h1 className="text-3xl font-bold text-gray-900">Programa de referidos</h1>
+        <p className="text-gray-600 hidden sm:block mt-1">Comparte tu código y gana recompensas</p>
       </div>
 
       {/* Estadísticas */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="card bg-gradient-to-br from-blue-50 to-indigo-50 border-blue-200">
-          <div className="flex items-center justify-between mb-2">
-            <Users className="text-blue-600" size={24} />
-            <span className="text-xs text-gray-600 font-medium">Total Referidos</span>
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        {[
+          {
+            label: 'Total referidos',
+            value: estadisticas.totalReferidos,
+            icon: <Users size={18} className="text-blue-600" />,
+            gradient: 'from-blue-50 to-indigo-50 border-blue-200',
+          },
+          {
+            label: 'Activos',
+            value: estadisticas.referidosActivos,
+            icon: <CheckCircle size={18} className="text-emerald-600" />,
+            gradient: 'from-emerald-50 to-emerald-100 border-emerald-200',
+          },
+          {
+            label: 'Total recompensas',
+            value: `$${estadisticas.totalRecompensas.toLocaleString('es-CO')}`,
+            icon: <DollarSign size={18} className="text-purple-600" />,
+            gradient: 'from-purple-50 to-pink-50 border-purple-200',
+          },
+          {
+            label: 'Pendientes',
+            value: estadisticas.recompensasPendientes,
+            icon: <Gift size={18} className="text-amber-600" />,
+            gradient: 'from-amber-50 to-amber-100 border-amber-200',
+          },
+        ].map(({ label, value, icon, gradient }) => (
+          <div
+            key={label}
+            className={`rounded-xl border bg-gradient-to-br px-3 py-2 sm:px-4 sm:py-3 shadow-sm flex items-center justify-between ${gradient}`}
+          >
+            <div className="space-y-1">
+              <p className="text-[11px] sm:text-xs font-semibold uppercase tracking-wide text-gray-600">
+                {label}
+              </p>
+              <p className="text-base sm:text-xl font-bold text-gray-900">{value}</p>
+            </div>
+            <div className="w-9 h-9 rounded-xl bg-white/70 backdrop-blur flex items-center justify-center">
+              {icon}
+            </div>
           </div>
-          <p className="text-2xl font-bold text-gray-900">{estadisticas.totalReferidos}</p>
-        </div>
-
-        <div className="card bg-gradient-to-br from-green-50 to-emerald-50 border-green-200">
-          <div className="flex items-center justify-between mb-2">
-            <CheckCircle className="text-green-600" size={24} />
-            <span className="text-xs text-gray-600 font-medium">Activos</span>
-          </div>
-          <p className="text-2xl font-bold text-gray-900">{estadisticas.referidosActivos}</p>
-        </div>
-
-        <div className="card bg-gradient-to-br from-purple-50 to-pink-50 border-purple-200">
-          <div className="flex items-center justify-between mb-2">
-            <DollarSign className="text-purple-600" size={24} />
-            <span className="text-xs text-gray-600 font-medium">Total Recompensas</span>
-          </div>
-          <p className="text-2xl font-bold text-gray-900">
-            ${estadisticas.totalRecompensas.toLocaleString('es-CO')}
-          </p>
-        </div>
-
-        <div className="card bg-gradient-to-br from-orange-50 to-amber-50 border-orange-200">
-          <div className="flex items-center justify-between mb-2">
-            <Gift className="text-orange-600" size={24} />
-            <span className="text-xs text-gray-600 font-medium">Pendientes</span>
-          </div>
-          <p className="text-2xl font-bold text-gray-900">{estadisticas.recompensasPendientes}</p>
-        </div>
+        ))}
       </div>
 
       {/* Código de Referido */}
@@ -254,67 +262,69 @@ export default function Referidos() {
           <h2 className="text-xl font-semibold text-gray-900">Tu Código de Referido</h2>
         </div>
         
-        <div className="bg-gradient-to-r from-primary-50 to-blue-50 p-6 rounded-lg border-2 border-primary-200">
-          <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
-            <div className="flex-1 text-center sm:text-left">
-              <p className="text-sm text-gray-600 mb-2">Comparte este código con tus amigos</p>
-              <div className="flex items-center justify-center sm:justify-start space-x-3">
-                <code className="text-2xl sm:text-3xl font-bold text-primary-700 font-mono bg-white px-4 py-2 rounded-lg border-2 border-primary-300">
-                  {codigoReferido}
+        <div className="bg-gradient-to-r from-primary-50 to-blue-50 p-5 rounded-lg border-2 border-primary-200 space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+            <div className="text-center sm:text-left space-y-2 w-full">
+              <p className="text-sm text-gray-600">Comparte este código con tus amigos</p>
+              <div className="w-full overflow-x-auto">
+                <code className="block w-max max-w-full text-base sm:text-3xl font-bold text-primary-700 font-mono bg-white px-4 py-2 rounded-lg border-2 border-primary-300 mx-auto sm:mx-0 break-all">
+                {codigoReferido}
                 </code>
               </div>
-              <p className="text-xs text-gray-500 mt-2">
+              <p className="text-xs text-gray-500">
                 Cada persona que se registre con tu código te generará recompensas
               </p>
             </div>
-            <div className="flex flex-col sm:flex-row items-center gap-2">
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 w-full sm:w-auto">
               <button
                 onClick={copiarCodigo}
-                className="btn-primary inline-flex items-center space-x-2 w-full sm:w-auto"
+                className="btn-primary inline-flex items-center justify-center gap-2 w-full text-xs sm:text-sm"
               >
-                <Copy size={18} />
+                <Copy size={16} />
                 <span>Copiar</span>
               </button>
               <button
                 onClick={compartirCodigo}
-                className="btn-secondary inline-flex items-center space-x-2 w-full sm:w-auto"
+                className="btn-secondary inline-flex items-center justify-center gap-2 w-full text-xs sm:text-sm"
               >
-                <Share2 size={18} />
+                <Share2 size={16} />
                 <span>Compartir</span>
               </button>
             </div>
           </div>
 
           {/* Opciones de Compartir */}
-          <div className="mt-4 pt-4 border-t border-primary-200">
-            <p className="text-sm font-medium text-gray-700 mb-3">Compartir por:</p>
+          <div className="pt-4 border-t border-primary-200">
+            <p className="text-xs font-semibold uppercase tracking-wide text-gray-600 mb-3">
+              Compartir por
+            </p>
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
               <button
                 onClick={compartirPorWhatsApp}
-                className="flex items-center justify-center space-x-2 p-3 bg-green-50 hover:bg-green-100 rounded-lg border border-green-200 transition-colors text-green-700 font-medium text-sm"
+                className="flex items-center justify-center gap-2 p-3 bg-green-50 hover:bg-green-100 rounded-lg border border-green-200 transition-colors text-green-700 font-medium text-xs sm:text-sm"
               >
-                <MessageSquare size={18} />
+                <MessageSquare size={16} />
                 <span>WhatsApp</span>
               </button>
               <button
                 onClick={compartirPorEmail}
-                className="flex items-center justify-center space-x-2 p-3 bg-blue-50 hover:bg-blue-100 rounded-lg border border-blue-200 transition-colors text-blue-700 font-medium text-sm"
+                className="flex items-center justify-center gap-2 p-3 bg-blue-50 hover:bg-blue-100 rounded-lg border border-blue-200 transition-colors text-blue-700 font-medium text-xs sm:text-sm"
               >
-                <Mail size={18} />
+                <Mail size={16} />
                 <span>Email</span>
               </button>
               <button
                 onClick={generarQR}
-                className="flex items-center justify-center space-x-2 p-3 bg-purple-50 hover:bg-purple-100 rounded-lg border border-purple-200 transition-colors text-purple-700 font-medium text-sm"
+                className="flex items-center justify-center gap-2 p-3 bg-purple-50 hover:bg-purple-100 rounded-lg border border-purple-200 transition-colors text-purple-700 font-medium text-xs sm:text-sm"
               >
-                <QrCode size={18} />
-                <span>QR Code</span>
+                <QrCode size={16} />
+                <span>QR</span>
               </button>
               <button
                 onClick={() => window.open(`/register?ref=${codigoReferido}`, '_blank')}
-                className="flex items-center justify-center space-x-2 p-3 bg-gray-50 hover:bg-gray-100 rounded-lg border border-gray-200 transition-colors text-gray-700 font-medium text-sm"
+                className="flex items-center justify-center gap-2 p-3 bg-gray-50 hover:bg-gray-100 rounded-lg border border-gray-200 transition-colors text-gray-700 font-medium text-xs sm:text-sm"
               >
-                <Download size={18} />
+                <Download size={16} />
                 <span>Link</span>
               </button>
             </div>

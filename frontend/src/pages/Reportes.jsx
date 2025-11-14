@@ -75,24 +75,24 @@ export default function Reportes() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="text-3xl font-bold text-gray-900">Reportes y Estadísticas</h1>
-          <p className="text-gray-600 mt-1">Análisis detallado de tu actividad</p>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="space-y-1">
+          <h1 className="text-3xl font-bold text-gray-900">Reportes y estadísticas</h1>
+          <p className="text-gray-600 hidden sm:block">Análisis detallado de tu actividad</p>
         </div>
-        <div className="mt-4 sm:mt-0 flex items-center space-x-2">
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
           <button
             onClick={exportarPDF}
-            className="btn-secondary inline-flex items-center space-x-2"
+            className="btn-secondary inline-flex items-center justify-center gap-2 text-xs sm:text-sm"
           >
-            <FileText size={18} />
+            <FileText size={16} />
             <span>PDF</span>
           </button>
           <button
             onClick={exportarExcel}
-            className="btn-primary inline-flex items-center space-x-2"
+            className="btn-primary inline-flex items-center justify-center gap-2 text-xs sm:text-sm"
           >
-            <FileSpreadsheet size={18} />
+            <FileSpreadsheet size={16} />
             <span>Excel</span>
           </button>
         </div>
@@ -100,11 +100,16 @@ export default function Reportes() {
 
       {/* Filtros de fecha */}
       <div className="card">
-        <div className="flex items-center space-x-4">
-          <Calendar size={20} className="text-gray-600" />
-          <div className="flex items-center space-x-2">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+          <div className="flex items-center gap-2 text-sm text-gray-600">
+            <Calendar size={18} className="text-gray-600" />
+            <span className="font-medium">Periodo de análisis</span>
+          </div>
+          <div className="flex flex-col sm:flex-row sm:items-end gap-2">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Desde</label>
+              <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">
+                Desde
+              </label>
               <input
                 type="date"
                 value={fechaInicio}
@@ -113,7 +118,9 @@ export default function Reportes() {
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Hasta</label>
+              <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">
+                Hasta
+              </label>
               <input
                 type="date"
                 value={fechaFin}
@@ -123,7 +130,7 @@ export default function Reportes() {
             </div>
             <button
               onClick={fetchReportes}
-              className="btn-primary mt-6"
+              className="btn-primary h-10 text-xs sm:text-sm sm:h-auto"
             >
               Actualizar
             </button>
@@ -134,54 +141,48 @@ export default function Reportes() {
       {reportes && (
         <>
           {/* Resumen General */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            <div className="card bg-gradient-to-br from-blue-50 to-blue-100 border border-blue-200">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-gray-600 mb-1">Total Prestado</p>
-                  <p className="text-2xl font-bold text-gray-900">
-                    ${reportes.totalPrestado?.toLocaleString('es-CO') || 0}
+          <div className="grid grid-cols-2 xl:grid-cols-4 gap-3">
+            {[
+              {
+                label: 'Total prestado',
+                value: reportes.totalPrestado?.toLocaleString('es-CO') || 0,
+                icon: <TrendingUp size={18} className="text-blue-600" />,
+                gradient: 'from-blue-50 to-blue-100 border-blue-200',
+              },
+              {
+                label: 'Total cobrado',
+                value: reportes.totalCobrado?.toLocaleString('es-CO') || 0,
+                icon: <TrendingUp size={18} className="text-emerald-600" />,
+                gradient: 'from-emerald-50 to-emerald-100 border-emerald-200',
+              },
+              {
+                label: 'Total pendiente',
+                value: reportes.totalPendiente?.toLocaleString('es-CO') || 0,
+                icon: <TrendingUp size={18} className="text-amber-600" />,
+                gradient: 'from-amber-50 to-amber-100 border-amber-200',
+              },
+              {
+                label: 'Perdido',
+                value: reportes.totalPerdido?.toLocaleString('es-CO') || 0,
+                icon: <TrendingUp size={18} className="text-red-600" />,
+                gradient: 'from-rose-50 to-rose-100 border-rose-200',
+              },
+            ].map(({ label, value, icon, gradient }) => (
+              <div
+                key={label}
+                className={`rounded-xl border bg-gradient-to-br px-3 py-2 sm:px-4 sm:py-3 shadow-sm flex items-center justify-between ${gradient}`}
+              >
+                <div className="space-y-1">
+                  <p className="text-[11px] sm:text-xs font-semibold uppercase tracking-wide text-gray-600">
+                    {label}
                   </p>
+                  <p className="text-base sm:text-xl font-bold text-gray-900">${value}</p>
                 </div>
-                <TrendingUp className="text-blue-600" size={32} />
-              </div>
-            </div>
-
-            <div className="card bg-gradient-to-br from-green-50 to-green-100 border border-green-200">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-gray-600 mb-1">Total Cobrado</p>
-                  <p className="text-2xl font-bold text-gray-900">
-                    ${reportes.totalCobrado?.toLocaleString('es-CO') || 0}
-                  </p>
+                <div className="w-9 h-9 rounded-xl bg-white/70 backdrop-blur flex items-center justify-center">
+                  {icon}
                 </div>
-                <TrendingUp className="text-green-600" size={32} />
               </div>
-            </div>
-
-            <div className="card bg-gradient-to-br from-yellow-50 to-yellow-100 border border-yellow-200">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-gray-600 mb-1">Total Pendiente</p>
-                  <p className="text-2xl font-bold text-gray-900">
-                    ${reportes.totalPendiente?.toLocaleString('es-CO') || 0}
-                  </p>
-                </div>
-                <TrendingUp className="text-yellow-600" size={32} />
-              </div>
-            </div>
-
-            <div className="card bg-gradient-to-br from-red-50 to-red-100 border border-red-200">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-gray-600 mb-1">Perdido</p>
-                  <p className="text-2xl font-bold text-gray-900">
-                    ${reportes.totalPerdido?.toLocaleString('es-CO') || 0}
-                  </p>
-                </div>
-                <TrendingUp className="text-red-600" size={32} />
-              </div>
-            </div>
+            ))}
           </div>
 
           {/* Ganancias */}
@@ -199,7 +200,7 @@ export default function Reportes() {
           {reportes.porZona && reportes.porZona.length > 0 && (
             <div className="card">
               <h2 className="text-xl font-semibold text-gray-900 mb-4">Productividad por Zona</h2>
-              <ResponsiveContainer width="100%" height={300}>
+              <ResponsiveContainer width="100%" height={280}>
                 <BarChart data={reportes.porZona}>
                   <CartesianGrid strokeDasharray="3 3" />
                   <XAxis dataKey="zona" />
@@ -216,7 +217,7 @@ export default function Reportes() {
           {reportes.porPeriodo && reportes.porPeriodo.length > 0 && (
             <div className="card">
               <h2 className="text-xl font-semibold text-gray-900 mb-4">Evolución Temporal</h2>
-              <ResponsiveContainer width="100%" height={300}>
+              <ResponsiveContainer width="100%" height={280}>
                 <LineChart data={reportes.porPeriodo}>
                   <CartesianGrid strokeDasharray="3 3" />
                   <XAxis dataKey="periodo" />

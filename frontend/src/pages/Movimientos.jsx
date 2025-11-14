@@ -52,7 +52,17 @@ export default function Movimientos() {
     observaciones: '',
     clienteId: '',
     prestamoId: '',
-    proveedor: ''
+    proveedor: '',
+    nominaUsuario: '',
+    nominaRuta: '',
+    nominaFechaInicio: new Date().toISOString().split('T')[0],
+    nominaFechaFin: new Date().toISOString().split('T')[0],
+    nominaValorNomina: '',
+    nominaValorPapeleria: '0',
+    nominaValorBono: '0',
+    nominaOtraGanancia: '0',
+    nominaValorDescuadre: '0',
+    nominaTotal: 0
   })
 
   useEffect(() => {
@@ -182,6 +192,44 @@ export default function Movimientos() {
     return cleaned
   }
 
+  const calcularTotalNomina = (datos) => {
+    const base = parseMontoColombiano(datos.nominaValorNomina)
+    const papeleria = parseMontoColombiano(datos.nominaValorPapeleria)
+    const bono = parseMontoColombiano(datos.nominaValorBono)
+    const otra = parseMontoColombiano(datos.nominaOtraGanancia)
+    const descuadre = parseMontoColombiano(datos.nominaValorDescuadre)
+    return base + papeleria + bono + otra - descuadre
+  }
+
+  const actualizarCampoNomina = (field, value) => {
+    setFormData(prev => {
+      const actualizado = {
+        ...prev,
+        [field]: value
+      }
+
+      if (prev.categoria === 'PAGO_NOMINA' && [
+        'nominaValorNomina',
+        'nominaValorPapeleria',
+        'nominaValorBono',
+        'nominaOtraGanancia',
+        'nominaValorDescuadre'
+      ].includes(field)) {
+        const total = calcularTotalNomina(actualizado)
+        actualizado.nominaTotal = total
+        actualizado.monto = total > 0 ? total.toLocaleString('es-CO') : ''
+      }
+
+      if (field === 'nominaRuta' && prev.categoria === 'PAGO_NOMINA') {
+        actualizado.descripcion = prev.descripcion?.startsWith('Pago de nómina')
+          ? `Pago de nómina - ${value}`
+          : prev.descripcion
+      }
+
+      return actualizado
+    })
+  }
+
   const handleSubmit = async (e) => {
     e.preventDefault()
     
@@ -191,20 +239,73 @@ export default function Movimientos() {
     }
     
     try {
-      const monto = parseMontoColombiano(formData.monto)
-      
+      let monto = parseMontoColombiano(formData.monto)
+      let descripcionMovimiento = formData.descripcion
+
+      if (formData.tipo === 'SALIDA' && formData.categoria === 'PAGO_NOMINA') {
+        const totalNomina = calcularTotalNomina(formData)
+
+        if (!formData.nominaUsuario.trim()) {
+          toast.error('El usuario responsable de la nómina es obligatorio')
+          return
+        }
+
+        if (!formData.nominaRuta.trim()) {
+          toast.error('La ruta asociada a la nómina es obligatoria')
+          return
+        }
+
+        if (!formData.nominaValorNomina.trim()) {
+          toast.error('Debes ingresar el valor base de la nómina')
+          return
+        }
+
+        if (totalNomina <= 0) {
+          toast.error('El total de la nómina debe ser mayor a cero')
+          return
+        }
+
+        monto = totalNomina
+        descripcionMovimiento = formData.descripcion && formData.descripcion.trim()
+          ? formData.descripcion
+          : `Pago de nómina - ${formData.nominaRuta}`
+      }
+
       if (isNaN(monto) || monto <= 0) {
         toast.error('El monto debe ser mayor a cero')
         return
       }
-      
-      await movimientosService.createMovimiento(user.id, {
+
+      const payload = {
         tipo: formData.tipo,
-        monto: monto,
-        descripcion: formData.descripcion,
+        monto,
+        descripcion: descripcionMovimiento,
         fecha: formData.fecha,
         observaciones: formData.observaciones || null
-      })
+      }
+
+      if (formData.tipo === 'SALIDA' && formData.categoria === 'PAGO_NOMINA') {
+        const detallesNomina = {
+          usuario: formData.nominaUsuario,
+          ruta: formData.nominaRuta,
+          fechaInicio: formData.nominaFechaInicio,
+          fechaFin: formData.nominaFechaFin,
+          valorNomina: parseMontoColombiano(formData.nominaValorNomina),
+          valorPapeleria: parseMontoColombiano(formData.nominaValorPapeleria),
+          valorBono: parseMontoColombiano(formData.nominaValorBono),
+          otraGanancia: parseMontoColombiano(formData.nominaOtraGanancia),
+          valorDescuadre: parseMontoColombiano(formData.nominaValorDescuadre),
+          total: monto
+        }
+
+        payload.observaciones = JSON.stringify({
+          tipo: 'PAGO_NOMINA',
+          detalles: detallesNomina,
+          notasAdicionales: formData.observaciones || undefined
+        })
+      }
+
+      await movimientosService.createMovimiento(user.id, payload)
       
       toast.success('Movimiento registrado exitosamente')
       setShowModal(false)
@@ -219,7 +320,17 @@ export default function Movimientos() {
         observaciones: '',
         clienteId: '',
         prestamoId: '',
-        proveedor: ''
+        proveedor: '',
+        nominaUsuario: '',
+        nominaRuta: '',
+        nominaFechaInicio: new Date().toISOString().split('T')[0],
+        nominaFechaFin: new Date().toISOString().split('T')[0],
+        nominaValorNomina: '',
+        nominaValorPapeleria: '0',
+        nominaValorBono: '0',
+        nominaOtraGanancia: '0',
+        nominaValorDescuadre: '0',
+        nominaTotal: 0
       })
       
       // Recargar movimientos y resumen
@@ -246,6 +357,7 @@ export default function Movimientos() {
     { value: 'GASTO_TRANSPORTE', label: 'Transporte' },
     { value: 'GASTO_SERVICIOS', label: 'Servicios Públicos' },
     { value: 'GASTO_MARKETING', label: 'Marketing' },
+    { value: 'PAGO_NOMINA', label: 'Pago de Nómina' },
     { value: 'GASTO_OTRO', label: 'Otro Gasto' }
   ]
 
@@ -303,6 +415,242 @@ export default function Movimientos() {
     }
   }
 
+  const handleExportMovimientos = async () => {
+    if (filteredMovimientos.length === 0) {
+      toast.info('No hay movimientos para exportar con los filtros actuales')
+      return
+    }
+
+    try {
+      const jspdfModule = await import('jspdf')
+      const jsPDFClass =
+        jspdfModule.jsPDF ||
+        (jspdfModule.default &&
+          (jspdfModule.default.jsPDF || jspdfModule.default)) ||
+        jspdfModule.default
+
+      if (!jsPDFClass) {
+        throw new Error('MODULE_NOT_FOUND')
+      }
+
+      const doc = new jsPDFClass({
+        orientation: 'landscape',
+        unit: 'mm',
+        format: 'a4'
+      })
+
+      const marginX = 14
+      const marginY = 22
+      const pageWidth = doc.internal.pageSize.getWidth()
+      const pageHeight = doc.internal.pageSize.getHeight()
+      const contentWidth = pageWidth - marginX * 2
+      const lineHeight = 4.1
+
+      const periodoTexto = `Periodo: ${new Date(fechaInicio).toLocaleDateString('es-CO')} - ${new Date(fechaFin).toLocaleDateString('es-CO')}`
+      const generadoPor = user?.nombreCompleto || user?.email || 'Usuario no identificado'
+
+      const totalEntradas = filteredMovimientos
+        .filter((mov) => mov.tipo === 'ENTRADA')
+        .reduce((sum, mov) => sum + (Number(mov.monto) || 0), 0)
+      const totalSalidas = filteredMovimientos
+        .filter((mov) => mov.tipo === 'SALIDA')
+        .reduce((sum, mov) => sum + (Number(mov.monto) || 0), 0)
+      const saldoPeriodo = totalEntradas - totalSalidas
+
+      const drawHeader = () => {
+        doc.setFillColor(17, 24, 39)
+        doc.rect(marginX, marginY - 26, contentWidth, 32, 'F')
+
+        doc.setTextColor(255, 255, 255)
+        doc.setFont('helvetica', 'bold')
+        doc.setFontSize(22)
+        doc.text('MOVIMIENTOS FINANCIEROS', marginX + 10, marginY - 12)
+
+        doc.setFont('helvetica', 'medium')
+        doc.setFontSize(11)
+        doc.text('Registro completo de entradas y salidas de efectivo', marginX + 10, marginY - 5)
+
+        doc.setFont('helvetica', 'normal')
+        doc.setFontSize(9.5)
+        const headerInfo = [
+          periodoTexto,
+          `Generado: ${new Date().toLocaleDateString('es-CO')}`,
+          `Generado por: ${generadoPor}`,
+          `Total movimientos: ${filteredMovimientos.length}`
+        ]
+
+        headerInfo.forEach((text, idx) => {
+          doc.text(text, pageWidth - marginX - 10, marginY - 15 + idx * 5.5, {
+            align: 'right'
+          })
+        })
+
+        doc.setDrawColor(148, 163, 184)
+        doc.setLineWidth(0.4)
+        doc.line(marginX, marginY + 6, marginX + contentWidth, marginY + 6)
+      }
+
+      const drawSummary = (startY) => {
+        const cards = [
+          { label: 'Total entradas', value: `$${totalEntradas.toLocaleString('es-CO')}` },
+          { label: 'Total salidas', value: `$${totalSalidas.toLocaleString('es-CO')}` },
+          { label: 'Saldo del periodo', value: `$${saldoPeriodo.toLocaleString('es-CO')}` }
+        ]
+
+        const cardWidth = (contentWidth - 12) / cards.length
+
+        cards.forEach((card, idx) => {
+          const x = marginX + idx * (cardWidth + 6)
+          doc.setFillColor(255, 255, 255)
+          doc.roundedRect(x, startY, cardWidth, 30, 3, 3, 'F')
+          doc.setDrawColor(226, 232, 240)
+          doc.roundedRect(x, startY, cardWidth, 30, 3, 3)
+
+          doc.setFillColor(229, 231, 235)
+          doc.roundedRect(x, startY, cardWidth, 11, 3, 3, 'F')
+
+          doc.setTextColor(55, 65, 81)
+          doc.setFont('helvetica', 'bold')
+          doc.setFontSize(9.5)
+          doc.text(card.label.toUpperCase(), x + 4, startY + 7)
+
+          doc.setTextColor(30, 41, 59)
+          doc.setFont('helvetica', 'bold')
+          doc.setFontSize(13)
+          const lines = doc.splitTextToSize(card.value, cardWidth - 8)
+          lines.forEach((line, lineIdx) => {
+            doc.text(line, x + 4, startY + 19 + lineIdx * 6)
+          })
+        })
+
+        return startY + 38
+      }
+
+      const columns = [
+        { title: 'Fecha', width: 26, align: 'left' },
+        { title: 'Hora', width: 18, align: 'center' },
+        { title: 'Tipo', width: 24, align: 'center' },
+        { title: 'Descripción', width: 56, align: 'left' },
+        { title: 'Monto', width: 32, align: 'right' },
+        { title: 'Método', width: 30, align: 'left' },
+        { title: 'Usuario', width: 36, align: 'left' },
+        { title: 'Observaciones', width: 47, align: 'left' }
+      ]
+
+      let currentX = marginX
+      columns.forEach((col) => {
+        col.x = currentX
+        currentX += col.width
+      })
+
+      const drawTableHeader = (startY) => {
+        doc.setFillColor(226, 232, 240)
+        doc.rect(marginX, startY - 7, currentX - marginX, 9, 'F')
+        doc.setDrawColor(203, 213, 225)
+        doc.rect(marginX, startY - 7, currentX - marginX, 9)
+        doc.setTextColor(30, 41, 59)
+        doc.setFont('helvetica', 'bold')
+        doc.setFontSize(10)
+
+        columns.forEach((col, idx) => {
+          const textX =
+            col.align === 'right'
+              ? col.x + col.width - 2
+              : col.align === 'center'
+                ? col.x + col.width / 2
+                : col.x + 2
+          const options =
+            col.align === 'right'
+              ? { align: 'right' }
+              : col.align === 'center'
+                ? { align: 'center' }
+                : undefined
+          doc.text(col.title.toUpperCase(), textX, startY - 1.5, options)
+
+          if (idx < columns.length - 1) {
+            const nextX = col.x + col.width
+            doc.line(nextX, startY - 7, nextX, startY + 2)
+          }
+        })
+      }
+
+      const getRowData = (movimiento) => [
+        new Date(movimiento.fecha).toLocaleDateString('es-CO'),
+        movimiento.hora || '—',
+        movimiento.tipo,
+        movimiento.descripcion,
+        `${movimiento.tipo === 'ENTRADA' ? '+' : '-'}$${Number(movimiento.monto || 0).toLocaleString('es-CO')}`,
+        movimiento.metodo || '—',
+        movimiento.usuario?.nombre || movimiento.cliente?.nombre || '—',
+        movimiento.observaciones || '—'
+      ]
+
+      drawHeader()
+      let currentY = drawSummary(marginY + 8)
+      currentY += 8
+      drawTableHeader(currentY)
+      currentY += 4
+
+      filteredMovimientos.forEach((movimiento, index) => {
+        const rowValues = getRowData(movimiento).map((value, idx) =>
+          doc.splitTextToSize(String(value), columns[idx].width - 4)
+        )
+
+        const rowHeight = Math.max(...rowValues.map((lines) => lines.length)) * lineHeight + 1.5
+
+        if (currentY + rowHeight > pageHeight - marginY) {
+          doc.addPage()
+          drawHeader()
+          currentY = drawSummary(marginY + 8)
+          currentY += 8
+          drawTableHeader(currentY)
+          currentY += 4
+        }
+
+        if (index % 2 === 0) {
+          doc.setFillColor(250, 250, 250)
+          doc.rect(marginX, currentY - 3, currentX - marginX, rowHeight + 1, 'F')
+        }
+
+        doc.setDrawColor(209, 213, 219)
+        doc.rect(marginX, currentY - 3, currentX - marginX, rowHeight + 1)
+
+        columns.forEach((col, colIdx) => {
+          if (colIdx < columns.length - 1) {
+            const dividerX = col.x + col.width
+            doc.line(dividerX, currentY - 3, dividerX, currentY - 3 + rowHeight + 1)
+          }
+
+          doc.setTextColor(30, 41, 59)
+          doc.setFont('helvetica', 'normal')
+          doc.setFontSize(9.2)
+
+          rowValues[colIdx].forEach((line, lineIdx) => {
+            const textY = currentY + lineIdx * lineHeight
+            if (col.align === 'right') {
+              doc.text(line, col.x + col.width - 3, textY, { align: 'right' })
+            } else if (col.align === 'center') {
+              doc.text(line, col.x + col.width / 2, textY, { align: 'center' })
+            } else {
+              doc.text(line, col.x + 3, textY)
+            }
+          })
+        })
+
+        currentY += rowHeight
+      })
+
+      doc.save(`movimientos_${new Date().toISOString().slice(0, 10)}.pdf`)
+    } catch (error) {
+      console.error('Error exportando PDF de movimientos:', error)
+      if (error.message === 'MODULE_NOT_FOUND') {
+        toast.error('No se pudo cargar la librería para exportar PDF')
+      } else {
+        toast.error('Error al exportar los movimientos')
+      }
+    }
+  }
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -327,7 +675,7 @@ export default function Movimientos() {
           </div>
           <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
             <button
-              onClick={() => toast.info('Función de exportar próximamente')}
+            onClick={handleExportMovimientos}
               className="btn-secondary inline-flex items-center justify-center space-x-2 h-12 text-sm font-medium touch-manipulation"
               title="Exportar a Excel"
             >
@@ -733,32 +1081,193 @@ export default function Movimientos() {
                 </div>
               </div>
 
-              {/* Monto - Optimizado para móvil */}
-              <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-3">
-                  Monto *
-                </label>
-                <div className="relative">
-                  <span className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-600 font-semibold text-lg">
-                    $
-                  </span>
-                  <input
-                    type="text"
-                    value={formData.monto}
-                    onChange={(e) => {
-                      const formatted = formatMontoInput(e.target.value)
-                      setFormData({ ...formData, monto: formatted })
-                    }}
-                    className="input-field pl-12 text-lg h-14 sm:h-12"
-                    required
-                    placeholder="0.000 o 0,00"
-                    inputMode="decimal"
-                  />
-                  <p className="text-xs text-gray-500 mt-1">
-                    Formato: 40.000 o 40.000,50 (punto para miles, coma para decimales)
-                  </p>
+              {formData.tipo === 'SALIDA' && formData.categoria === 'PAGO_NOMINA' && (
+                <div className="space-y-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-semibold text-gray-700 mb-2">
+                        Usuario responsable *
+                      </label>
+                      <input
+                        type="text"
+                        value={formData.nominaUsuario}
+                        onChange={(e) => actualizarCampoNomina('nominaUsuario', e.target.value)}
+                        className="input-field h-12 text-base"
+                        placeholder="Nombre del usuario"
+                        required
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-semibold text-gray-700 mb-2">
+                        Ruta *
+                      </label>
+                      <input
+                        type="text"
+                        value={formData.nominaRuta}
+                        onChange={(e) => actualizarCampoNomina('nominaRuta', e.target.value)}
+                        className="input-field h-12 text-base"
+                        placeholder="Ej. Ruta 1"
+                        required
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-semibold text-gray-700 mb-2">
+                        Fecha inicio *
+                      </label>
+                      <input
+                        type="date"
+                        value={formData.nominaFechaInicio}
+                        onChange={(e) => actualizarCampoNomina('nominaFechaInicio', e.target.value)}
+                        className="input-field h-12 text-base"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-semibold text-gray-700 mb-2">
+                        Fecha final *
+                      </label>
+                      <input
+                        type="date"
+                        value={formData.nominaFechaFin}
+                        onChange={(e) => actualizarCampoNomina('nominaFechaFin', e.target.value)}
+                        className="input-field h-12 text-base"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                    <div>
+                      <label className="block text-sm font-semibold text-gray-700 mb-2">
+                        Valor nómina *
+                      </label>
+                      <div className="relative">
+                        <span className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-600 font-semibold text-lg">
+                          $
+                        </span>
+                        <input
+                          type="text"
+                          value={formData.nominaValorNomina}
+                          onChange={(e) => actualizarCampoNomina('nominaValorNomina', formatMontoInput(e.target.value))}
+                          className="input-field pl-12 h-12 text-base"
+                          placeholder="Escriba el valor de la nómina"
+                          required
+                        />
+                      </div>
+                      <p className="text-xs text-gray-500 mt-1">Este campo es obligatorio</p>
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-semibold text-gray-700 mb-2">
+                        Valor papelería
+                      </label>
+                      <div className="relative">
+                        <span className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-600 font-semibold text-lg">
+                          $
+                        </span>
+                        <input
+                          type="text"
+                          value={formData.nominaValorPapeleria}
+                          onChange={(e) => actualizarCampoNomina('nominaValorPapeleria', formatMontoInput(e.target.value))}
+                          className="input-field pl-12 h-12 text-base"
+                          placeholder="0"
+                        />
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-semibold text-gray-700 mb-2">
+                        Valor del bono
+                      </label>
+                      <div className="relative">
+                        <span className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-600 font-semibold text-lg">
+                          $
+                        </span>
+                        <input
+                          type="text"
+                          value={formData.nominaValorBono}
+                          onChange={(e) => actualizarCampoNomina('nominaValorBono', formatMontoInput(e.target.value))}
+                          className="input-field pl-12 h-12 text-base"
+                          placeholder="0"
+                        />
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-semibold text-gray-700 mb-2">
+                        Otra ganancia
+                      </label>
+                      <div className="relative">
+                        <span className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-600 font-semibold text-lg">
+                          $
+                        </span>
+                        <input
+                          type="text"
+                          value={formData.nominaOtraGanancia}
+                          onChange={(e) => actualizarCampoNomina('nominaOtraGanancia', formatMontoInput(e.target.value))}
+                          className="input-field pl-12 h-12 text-base"
+                          placeholder="0"
+                        />
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-semibold text-gray-700 mb-2">
+                        Valor del descuadre
+                      </label>
+                      <div className="relative">
+                        <span className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-600 font-semibold text-lg">
+                          $
+                        </span>
+                        <input
+                          type="text"
+                          value={formData.nominaValorDescuadre}
+                          onChange={(e) => actualizarCampoNomina('nominaValorDescuadre', formatMontoInput(e.target.value))}
+                          className="input-field pl-12 h-12 text-base"
+                          placeholder="0"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="flex flex-col justify-end bg-gray-50 border border-gray-200 rounded-xl p-4">
+                      <p className="text-xs text-gray-500 uppercase font-semibold tracking-wide">Total nómina</p>
+                      <p className="text-2xl font-bold text-gray-900 mt-1">
+                        ${formData.nominaTotal.toLocaleString('es-CO')}
+                      </p>
+                    </div>
+                  </div>
                 </div>
-              </div>
+              )}
+
+              {/* Monto - Optimizado para móvil */}
+              {!(formData.tipo === 'SALIDA' && formData.categoria === 'PAGO_NOMINA') && (
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-3">
+                    Monto *
+                  </label>
+                  <div className="relative">
+                    <span className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-600 font-semibold text-lg">
+                      $
+                    </span>
+                    <input
+                      type="text"
+                      value={formData.monto}
+                      onChange={(e) => {
+                        const formatted = formatMontoInput(e.target.value)
+                        setFormData({ ...formData, monto: formatted })
+                      }}
+                      className="input-field pl-12 text-lg h-14 sm:h-12"
+                      required
+                      placeholder="0.000 o 0,00"
+                      inputMode="decimal"
+                    />
+                    <p className="text-xs text-gray-500 mt-1">
+                      Formato: 40.000 o 40.000,50 (punto para miles, coma para decimales)
+                    </p>
+                  </div>
+                </div>
+              )}
 
               {/* Método de Pago - Optimizado para móvil */}
               <div>
@@ -820,7 +1329,19 @@ export default function Movimientos() {
                 </label>
                 <select
                   value={formData.categoria}
-                  onChange={(e) => setFormData({ ...formData, categoria: e.target.value })}
+                  onChange={(e) => {
+                    const value = e.target.value
+                    setFormData(prev => ({
+                      ...prev,
+                      categoria: value,
+                      descripcion: value === 'PAGO_NOMINA'
+                        ? `Pago de nómina - ${prev.nominaRuta || 'Sin ruta'}`
+                        : prev.descripcion,
+                      monto: value === 'PAGO_NOMINA'
+                        ? (prev.nominaTotal > 0 ? prev.nominaTotal.toLocaleString('es-CO') : '')
+                        : prev.monto
+                    }))
+                  }}
                   className="input-field h-14 sm:h-12 text-base"
                 >
                   <option value="">Seleccionar categoría (opcional)</option>
@@ -924,4 +1445,3 @@ export default function Movimientos() {
     </div>
   )
 }
-

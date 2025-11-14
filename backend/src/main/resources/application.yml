@@ -3,12 +3,11 @@ spring:
     name: prestacol-backend
   
   datasource:
-    # Configuración para Supabase (Proyecto: ijskcroggxijvxronqy)
-    # Usando Session Pooler para IPv4 (compatible con IPv4)
-    # URL del Session Pooler obtenida del dashboard de Supabase
-    url: jdbc:postgresql://aws-1-us-east-1.pooler.supabase.com:5432/postgres?sslmode=require
-    username: postgres.ijjskcroggxijvxronqy
-    password: 2167296210a
+    # Configuración para Supabase (Proyecto: ijjskcroggxijvxronqy)
+    # Usar pooler compartido (grupo de sesiones) para conexiones desde IPv4
+    url: ${SPRING_DATASOURCE_URL}
+    username: ${SPRING_DATASOURCE_USERNAME}
+    password: ${SPRING_DATASOURCE_PASSWORD}
     driver-class-name: org.postgresql.Driver
     hikari:
       maximum-pool-size: 5
@@ -20,7 +19,7 @@ spring:
   
   jpa:
     hibernate:
-      ddl-auto: update
+      ddl-auto: none
     show-sql: false
     properties:
       hibernate:

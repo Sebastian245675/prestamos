@@ -250,120 +250,136 @@ export default function Dashboard() {
   // Si no hay nada cobrado, las ganancias son 0
   const ganancias = Math.max(0, stats.totalCobrado - stats.totalPrestado)
 
+  const quickStats = [
+    {
+      label: 'Total Prestado',
+      value: stats.totalPrestado,
+      icon: <DollarSign className="text-blue-600" size={24} />,
+      gradient: 'from-blue-50 to-blue-100 border-blue-200',
+    },
+    {
+      label: 'Total Cobrado',
+      value: stats.totalCobrado,
+      icon: <TrendingUp className="text-emerald-600" size={24} />,
+      gradient: 'from-emerald-50 to-emerald-100 border-emerald-200',
+    },
+    {
+      label: 'Pendiente',
+      value: stats.totalPendiente,
+      icon: <AlertCircle className="text-amber-600" size={24} />,
+      gradient: 'from-amber-50 to-amber-100 border-amber-200',
+    },
+    {
+      label: 'Ganancias',
+      value: ganancias,
+      icon: <CheckCircle className="text-purple-600" size={24} />,
+      gradient: 'from-purple-50 to-purple-100 border-purple-200',
+    },
+  ]
+
+  const statusCards = [
+    {
+      label: 'Préstamos Activos',
+      value: stats.prestamosActivos,
+      color: 'text-emerald-600',
+      iconBg: 'bg-emerald-50',
+      icon: <CheckCircle className="text-emerald-600" size={22} />,
+      link: '/prestamos?estado=ACTIVO',
+    },
+    {
+      label: 'Préstamos Vencidos',
+      value: stats.prestamosVencidos,
+      color: 'text-red-600',
+      iconBg: 'bg-red-50',
+      icon: <AlertCircle className="text-red-600" size={22} />,
+      link: '/prestamos?estado=VENCIDO',
+    },
+    {
+      label: 'Préstamos Finalizados',
+      value: stats.prestamosFinalizados,
+      color: 'text-slate-600',
+      iconBg: 'bg-slate-100',
+      icon: <CheckCircle className="text-slate-500" size={22} />,
+      link: '/prestamos?estado=FINALIZADO',
+    },
+  ]
+
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 pb-24 sm:pb-6">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between">
-        <div>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="space-y-1">
           <h1 className="text-3xl font-bold text-gray-900">Dashboard</h1>
-          <p className="text-gray-600 mt-1">Resumen de tu actividad</p>
+          <p className="text-gray-600 hidden sm:block">
+            Monitorea el desempeño de tu cartera en tiempo real desde cualquier dispositivo.
+          </p>
         </div>
-        <Link
-          to="/prestamos/nuevo"
-          className="mt-4 sm:mt-0 btn-primary inline-flex items-center space-x-2"
-        >
-          <Plus size={20} />
-          <span>Nuevo Préstamo</span>
-        </Link>
+        <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
+          <Link
+            to="/prestamos/nuevo"
+            className="btn-primary inline-flex items-center justify-center gap-2 w-full sm:w-auto"
+          >
+            <Plus size={18} />
+            <span>Nuevo Préstamo</span>
+          </Link>
+          <Link
+            to="/movimientos"
+            className="btn-secondary inline-flex items-center justify-center gap-2 w-full sm:w-auto"
+          >
+            <Wallet size={18} />
+            <span>Registrar Movimiento</span>
+          </Link>
+        </div>
       </div>
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="card bg-gradient-to-br from-blue-50 to-blue-100 border border-blue-200">
-          <div className="flex items-center justify-between">
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+        {quickStats.map((stat) => (
+          <div
+            key={stat.label}
+            className={`rounded-2xl border bg-gradient-to-br p-5 shadow-sm flex items-center justify-between ${stat.gradient}`}
+          >
             <div>
-              <p className="text-sm text-gray-600 mb-1">Total Prestado</p>
-              <p className="text-2xl font-bold text-gray-900">
-                ${stats.totalPrestado.toLocaleString('es-CO')}
+              <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+                {stat.label}
+              </p>
+              <p className="text-2xl font-bold text-gray-900 mt-1">
+                ${Number(stat.value || 0).toLocaleString('es-CO')}
               </p>
             </div>
-            <DollarSign className="text-blue-600" size={32} />
-          </div>
-        </div>
-
-        <div className="card bg-gradient-to-br from-green-50 to-green-100 border border-green-200">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-gray-600 mb-1">Total Cobrado</p>
-              <p className="text-2xl font-bold text-gray-900">
-                ${stats.totalCobrado.toLocaleString('es-CO')}
-              </p>
+            <div className="w-12 h-12 rounded-2xl bg-white/60 backdrop-blur flex items-center justify-center shadow-inner">
+              {stat.icon}
             </div>
-            <TrendingUp className="text-green-600" size={32} />
           </div>
-        </div>
-
-        <div className="card bg-gradient-to-br from-yellow-50 to-yellow-100 border border-yellow-200">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-gray-600 mb-1">Pendiente</p>
-              <p className="text-2xl font-bold text-gray-900">
-                ${stats.totalPendiente.toLocaleString('es-CO')}
-              </p>
-            </div>
-            <AlertCircle className="text-yellow-600" size={32} />
-          </div>
-        </div>
-
-        <div className="card bg-gradient-to-br from-purple-50 to-purple-100 border border-purple-200">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-gray-600 mb-1">Ganancias</p>
-              <p className="text-2xl font-bold text-gray-900">
-                ${ganancias.toLocaleString('es-CO')}
-              </p>
-            </div>
-            <CheckCircle className="text-purple-600" size={32} />
-          </div>
-        </div>
+        ))}
       </div>
 
       {/* Status Cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <Link to="/prestamos?estado=ACTIVO" className="card hover:shadow-lg transition-shadow cursor-pointer">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-gray-600 mb-1">Préstamos Activos</p>
-              <p className="text-3xl font-bold text-primary-600">{stats.prestamosActivos}</p>
+        {statusCards.map((card) => (
+          <Link
+            key={card.label}
+            to={card.link}
+            className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm transition hover:shadow-md flex flex-col gap-4"
+          >
+            <div className="flex items-start justify-between">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+                  {card.label}
+                </p>
+                <p className={`text-3xl font-bold mt-2 ${card.color}`}>
+                  {Number(card.value || 0).toLocaleString('es-CO')}
+                </p>
+              </div>
+              <div className={`w-12 h-12 rounded-xl flex items-center justify-center shadow-inner ${card.iconBg}`}>
+                {card.icon}
+              </div>
             </div>
-            <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center">
-              <CheckCircle className="text-green-600" size={24} />
+            <div className="flex items-center text-sm font-medium text-primary-600">
+              Ver detalles <ArrowRight size={16} className="ml-1" />
             </div>
-          </div>
-          <div className="mt-4 flex items-center text-sm text-primary-600">
-            Ver detalles <ArrowRight size={16} className="ml-1" />
-          </div>
-        </Link>
-
-        <Link to="/prestamos?estado=VENCIDO" className="card hover:shadow-lg transition-shadow cursor-pointer">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-gray-600 mb-1">Préstamos Vencidos</p>
-              <p className="text-3xl font-bold text-red-600">{stats.prestamosVencidos}</p>
-            </div>
-            <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center">
-              <AlertCircle className="text-red-600" size={24} />
-            </div>
-          </div>
-          <div className="mt-4 flex items-center text-sm text-red-600">
-            Ver detalles <ArrowRight size={16} className="ml-1" />
-          </div>
-        </Link>
-
-        <Link to="/prestamos?estado=FINALIZADO" className="card hover:shadow-lg transition-shadow cursor-pointer">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-gray-600 mb-1">Préstamos Finalizados</p>
-              <p className="text-3xl font-bold text-gray-600">{stats.prestamosFinalizados}</p>
-            </div>
-            <div className="w-12 h-12 bg-gray-100 rounded-full flex items-center justify-center">
-              <CheckCircle className="text-gray-600" size={24} />
-            </div>
-          </div>
-          <div className="mt-4 flex items-center text-sm text-gray-600">
-            Ver detalles <ArrowRight size={16} className="ml-1" />
-          </div>
-        </Link>
+          </Link>
+        ))}
       </div>
 
       {/* Movimientos Financieros - Sección Avanzada */}
@@ -371,27 +387,24 @@ export default function Dashboard() {
         {/* Header con Filtros y Acciones */}
         <div className="card bg-gradient-to-r from-primary-50 to-blue-50 border-primary-200">
           <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
-            <div>
-              <div className="flex items-center space-x-2 mb-2">
-                <Activity className="text-primary-600" size={24} />
-                <h2 className="text-2xl font-bold text-gray-900">Movimientos Financieros</h2>
-              </div>
-              <p className="text-sm text-gray-600">Seguimiento en tiempo real de tus flujos de efectivo</p>
+            <div className="flex items-center justify-between sm:justify-start sm:space-x-2">
+              <Activity className="text-primary-600 hidden sm:block" size={24} />
+              <h2 className="text-xl sm:text-2xl font-bold text-gray-900">Movimientos financieros</h2>
             </div>
-            <div className="flex items-center space-x-2">
-              <Link 
-                to="/movimientos" 
-                className="btn-secondary inline-flex items-center space-x-2"
+            <div className="flex flex-wrap items-center gap-2">
+              <Link
+                to="/movimientos"
+                className="btn-secondary inline-flex items-center gap-2 text-xs sm:text-sm"
               >
-                <BarChart3 size={18} />
-                <span>Ver Detallado</span>
+                <BarChart3 size={16} />
+                <span>Ver detalles</span>
               </Link>
-              <Link 
-                to="/movimientos" 
-                className="btn-primary inline-flex items-center space-x-2"
+              <Link
+                to="/movimientos"
+                className="btn-primary inline-flex items-center gap-2 text-xs sm:text-sm"
               >
-                <Plus size={18} />
-                <span>Nuevo Movimiento</span>
+                <Plus size={16} />
+                <span>Nuevo</span>
               </Link>
             </div>
           </div>
@@ -406,13 +419,9 @@ export default function Dashboard() {
               </div>
               <span className="text-xs text-gray-600 font-medium">Entradas</span>
             </div>
-            <p className="text-2xl font-bold text-gray-900 mb-1">
+            <p className="text-xl sm:text-2xl font-bold text-gray-900 mb-2">
               ${(resumenMovimientos[filtroPeriodo.toLowerCase()]?.entradas || 0).toLocaleString('es-CO', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
             </p>
-            <div className="flex items-center space-x-1 text-xs">
-              <span className="text-green-600">↑</span>
-              <span className="text-gray-600">Crecimiento positivo</span>
-            </div>
           </div>
 
           <div className="card bg-gradient-to-br from-red-50 to-rose-50 border-red-200">
@@ -422,12 +431,9 @@ export default function Dashboard() {
               </div>
               <span className="text-xs text-gray-600 font-medium">Salidas</span>
             </div>
-            <p className="text-2xl font-bold text-gray-900 mb-1">
+            <p className="text-xl sm:text-2xl font-bold text-gray-900 mb-2">
               ${(resumenMovimientos[filtroPeriodo.toLowerCase()]?.salidas || 0).toLocaleString('es-CO', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
             </p>
-            <div className="flex items-center space-x-1 text-xs">
-              <span className="text-gray-600">Control de gastos</span>
-            </div>
           </div>
 
           <div className="card bg-gradient-to-br from-blue-50 to-indigo-50 border-blue-200">
@@ -437,35 +443,29 @@ export default function Dashboard() {
               </div>
               <span className="text-xs text-gray-600 font-medium">Neto</span>
             </div>
-            <p className={`text-2xl font-bold mb-1 ${
+            <p className={`text-xl sm:text-2xl font-bold mb-2 ${
               resumenMovimientos[filtroPeriodo.toLowerCase()]?.neto >= 0 ? 'text-green-700' : 'text-red-700'
             }`}>
               ${(resumenMovimientos[filtroPeriodo.toLowerCase()]?.neto || 0).toLocaleString('es-CO', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
             </p>
-            <div className="flex items-center space-x-1 text-xs">
-              <span className={resumenMovimientos[filtroPeriodo.toLowerCase()]?.neto >= 0 ? 'text-green-600' : 'text-red-600'}>
-                {resumenMovimientos[filtroPeriodo.toLowerCase()]?.neto >= 0 ? '↑' : '↓'}
-              </span>
-              <span className="text-gray-600">Balance {filtroPeriodo.toLowerCase()}</span>
-            </div>
           </div>
         </div>
 
         {/* Filtros de Período */}
         <div className="card">
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center space-x-2">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-center gap-2 text-sm text-gray-700">
               <Filter size={18} className="text-gray-600" />
-              <span className="text-sm font-medium text-gray-700">Período:</span>
+              <span className="font-medium">Período</span>
             </div>
-            <div className="flex items-center space-x-2">
+            <div className="flex flex-wrap gap-2">
               {['HOY', 'SEMANA', 'MES'].map((periodo) => (
                 <button
                   key={periodo}
                   onClick={() => setFiltroPeriodo(periodo)}
                   className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
                     filtroPeriodo === periodo
-                      ? 'bg-primary-600 text-white'
+                      ? 'bg-primary-600 text-white shadow'
                       : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                   }`}
                 >
@@ -478,12 +478,12 @@ export default function Dashboard() {
 
         {/* Timeline de Préstamos Recientes */}
         <div className="card">
-          <div className="flex items-center justify-between mb-4">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-4">
             <div className="flex items-center space-x-2">
               <Clock className="text-primary-600" size={20} />
               <h3 className="text-lg font-semibold text-gray-900">Actividad Reciente</h3>
             </div>
-            <div className="flex items-center space-x-3">
+            <div className="flex items-center gap-3 text-sm">
               <Link to="/movimientos" className="text-sm text-primary-600 hover:text-primary-700 font-medium">
                 Movimientos →
               </Link>
@@ -511,7 +511,7 @@ export default function Dashboard() {
             ) : (
               <div className="relative">
                 {/* Línea vertical del timeline */}
-                <div className="absolute left-6 top-0 bottom-0 w-0.5 bg-gray-200"></div>
+                <div className="absolute left-6 top-0 bottom-0 hidden sm:block w-0.5 bg-gray-200"></div>
                 
                 {actividadReciente.map((item, index) => {
                   const getEstadoColor = (estado) => {
@@ -555,7 +555,7 @@ export default function Dashboard() {
                         </div>
 
                         {/* Contenido del préstamo */}
-                        <div className={`flex-1 rounded-lg border-2 p-4 hover:shadow-md transition-all ${getEstadoBg(prestamo.estado)}`}>
+                        <div className={`flex-1 rounded-xl border-2 p-4 hover:shadow-md transition-all ${getEstadoBg(prestamo.estado)}`}>
                           <div className="flex items-start justify-between">
                             <div className="flex-1 min-w-0">
                               <div className="flex items-center space-x-2 mb-2">
@@ -643,7 +643,7 @@ export default function Dashboard() {
                         </div>
 
                         {/* Contenido del movimiento */}
-                        <div className={`flex-1 rounded-lg border-2 p-4 hover:shadow-md transition-all ${
+                        <div className={`flex-1 rounded-xl border-2 p-4 hover:shadow-md transition-all ${
                           movimiento.tipo === 'ENTRADA' 
                             ? 'bg-green-50 border-green-200' 
                             : 'bg-red-50 border-red-200'
@@ -699,6 +699,27 @@ export default function Dashboard() {
               </div>
             )}
           </div>
+        </div>
+      </div>
+      {/* Mobile quick action dock */}
+      <div className="md:hidden fixed bottom-4 left-1/2 -translate-x-1/2 w-[92%] z-40">
+        <div className="rounded-3xl border border-gray-200 bg-white shadow-lg px-4 py-3 flex items-center justify-between">
+          <Link to="/prestamos" className="flex flex-col items-center text-xs font-medium text-gray-600">
+            <CreditCard size={18} className="text-primary-600 mb-1" />
+            Préstamos
+          </Link>
+          <Link to="/movimientos" className="flex flex-col items-center text-xs font-medium text-gray-600">
+            <Wallet size={18} className="text-primary-600 mb-1" />
+            Movimientos
+          </Link>
+          <Link to="/clientes" className="flex flex-col items-center text-xs font-medium text-gray-600">
+            <User size={18} className="text-primary-600 mb-1" />
+            Clientes
+          </Link>
+          <Link to="/reportes" className="flex flex-col items-center text-xs font-medium text-gray-600">
+            <BarChart3 size={18} className="text-primary-600 mb-1" />
+            Reportes
+          </Link>
         </div>
       </div>
     </div>

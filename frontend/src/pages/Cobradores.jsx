@@ -4,9 +4,11 @@ import { useAuth } from '../context/AuthContext'
 import { usuariosService } from '../services/usuariosService'
 import { Plus, Edit, Trash2, UserPlus, Mail, Phone, CheckCircle } from 'lucide-react'
 import api from '../utils/api'
+import { useNavigate } from 'react-router-dom'
 
 export default function Cobradores() {
   const { user } = useAuth()
+  const navigate = useNavigate()
   const [cobradores, setCobradores] = useState([])
   const [loading, setLoading] = useState(true)
   const [showModal, setShowModal] = useState(false)
@@ -250,19 +252,28 @@ export default function Cobradores() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between">
-        <div>
+      <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3">
+        <div className="space-y-1">
           <h1 className="text-3xl font-bold text-gray-900">Cobradores</h1>
-          <p className="text-gray-600 mt-1">Gestiona tus cobradores (máximo 2)</p>
+          <p className="text-gray-600">Gestiona tus cobradores (máximo 2)</p>
         </div>
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+          <button
+            onClick={() => navigate('/cobradores/liquidacion')}
+            className="btn-secondary inline-flex items-center justify-center space-x-2"
+          >
+            <UserPlus size={18} />
+            <span>Ver liquidación</span>
+          </button>
         <button
           onClick={openModal}
           disabled={cobradores.length >= 2}
-          className="mt-4 sm:mt-0 btn-primary inline-flex items-center space-x-2 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="btn-primary inline-flex items-center space-x-2 disabled:opacity-50 disabled:cursor-not-allowed"
         >
           <Plus size={20} />
           <span>Nuevo Cobrador</span>
         </button>
+        </div>
       </div>
 
       {/* Cobradores List */}

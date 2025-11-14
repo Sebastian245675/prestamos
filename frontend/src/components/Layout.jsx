@@ -157,7 +157,7 @@ export default function Layout() {
           </div>
           
           {/* Contenido de la página */}
-          <div className="p-4 lg:p-8">
+          <div className="p-4 pb-24 lg:p-8 lg:pb-8">
             <Outlet />
           </div>
         </main>
@@ -166,10 +166,32 @@ export default function Layout() {
       {/* Overlay for mobile */}
       {mobileMenuOpen && (
         <div
-          className="fixed inset-0 bg-black bg-opacity-50 z-30 lg:hidden"
+          className="fixed inset-0 bg-black bg-opacity-50 z-20 lg:hidden"
           onClick={() => setMobileMenuOpen(false)}
         />
       )}
+
+      {/* Mobile quick navigation dock */}
+      <div className="md:hidden fixed bottom-4 left-1/2 -translate-x-1/2 w-[92%] z-40">
+        <div className="rounded-3xl border border-gray-200 bg-white shadow-lg px-4 py-3 flex items-center justify-between">
+          <Link to="/prestamos" className="flex flex-col items-center text-[11px] font-medium text-gray-600">
+            <FileText size={18} className="text-primary-600 mb-1" />
+            Préstamos
+          </Link>
+          <Link to="/movimientos" className="flex flex-col items-center text-[11px] font-medium text-gray-600">
+            <Wallet size={18} className="text-primary-600 mb-1" />
+            Movimientos
+          </Link>
+          <Link to="/clientes" className="flex flex-col items-center text-[11px] font-medium text-gray-600">
+            <UserCircle size={18} className="text-primary-600 mb-1" />
+            Clientes
+          </Link>
+          <Link to="/reportes" className="flex flex-col items-center text-[11px] font-medium text-gray-600">
+            <BarChart3 size={18} className="text-primary-600 mb-1" />
+            Reportes
+          </Link>
+        </div>
+      </div>
     </div>
   )
 }
