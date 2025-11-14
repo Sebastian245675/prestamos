@@ -1,0 +1,10 @@
+# Configuración local para desarrollo
+# Este archivo se carga automáticamente cuando ejecutas el backend localmente
+# IMPORTANTE: Reemplaza [YOUR-PASSWORD] con tu contraseña real de Supabase
+
+spring:
+  datasource:
+    url: postgresql://postgres.ijjskcroggxijvxronqy:[YOUR-PASSWORD]@aws-1-us-east-1.pooler.supabase.com:5432/postgres
+    username: postgres.ijjskcroggxijvxronqy
+    password: [YOUR-PASSWORD]
+

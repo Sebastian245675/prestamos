@@ -28,54 +28,76 @@ public class ReferidoService {
     
     /**
      * Genera un código único de referido para un usuario
-     * Usa el mismo método que UsuarioService para garantizar consistencia
+     * Formato: REF-XXXXXX-YYYYYY donde XXXXXX es el ID y YYYYYY es un código aleatorio
+     * El código es determinístico basado en el usuarioId para mantener consistencia
      */
-    public String generarCodigoReferido(Long usuarioId) {
-        // Delegar al método mejorado de UsuarioService
-        // Por ahora, usar el mismo algoritmo mejorado aquí
-        return generarCodigoReferidoMejorado(usuarioId);
-    }
-    
-    /**
-     * Genera un código único de referido mejorado con validación de unicidad
-     */
-    private String generarCodigoReferidoMejorado(Long usuarioId) {
+    private String generarCodigoReferido(Long usuarioId) {
         int maxIntentos = 10;
         int intento = 0;
         
+        // Usar el ID del usuario como semilla para hacer el código más determinístico
+        // pero aún único
+        String baseCodigo = "REF-" + String.format("%06d", usuarioId) + "-";
+        long semilla = usuarioId * 31L; // Hash simple para generar parte del código
+        
         while (intento < maxIntentos) {
-            // Generar código único: REF-XXXXXX-YYYYYY
-            String codigoAleatorio = generarCodigoAleatorioSeguro();
-            String codigo = "REF-" + String.format("%06d", usuarioId) + "-" + codigoAleatorio;
+            // Generar código determinístico basado en el ID del usuario
+            String codigoAleatorio = generarCodigoAleatorioConSemilla(semilla + intento);
+            String codigo = baseCodigo + codigoAleatorio;
             
-            // Verificar unicidad en la base de datos
-            Optional<Usuario> usuarioExistente = usuarioRepository.findByCodigoReferido(codigo);
-            if (usuarioExistente.isEmpty()) {
-                return codigo;
+            // Verificar que el código sea único
+            try {
+                Optional<Usuario> existe = usuarioRepository.findByCodigoReferido(codigo);
+                if (existe.isEmpty()) {
+                    return codigo;
+                }
+            } catch (Exception e) {
+                log.warn("Error al verificar código único, intentando otro: {}", e.getMessage());
             }
             
             intento++;
-            log.warn("Colisión detectada en código de referido {}, intento {}", codigo, intento);
         }
         
-        // Fallback con UUID completo
-        String codigoFallback = "REF-" + String.format("%06d", usuarioId) + "-" + 
-                                UUID.randomUUID().toString().replace("-", "").substring(0, 8).toUpperCase();
-        log.warn("Usando código de fallback para usuario {}: {}", usuarioId, codigoFallback);
-        return codigoFallback;
+        // Si hay colisión después de varios intentos, usar UUID pero basado en el ID
+        try {
+            String uuid = UUID.nameUUIDFromBytes((usuarioId.toString() + System.currentTimeMillis()).getBytes())
+                    .toString().replace("-", "").substring(0, 8).toUpperCase();
+            return baseCodigo + uuid;
+        } catch (Exception e) {
+            log.warn("Error al generar UUID basado en ID, usando método alternativo: {}", e.getMessage());
+            // Método alternativo: usar hash del ID del usuario
+            String hash = String.valueOf(Math.abs(usuarioId.hashCode()));
+            String suffix = hash.length() >= 8 ? hash.substring(0, 8) : hash + "X".repeat(8 - hash.length());
+            return baseCodigo + suffix.toUpperCase();
+        }
     }
     
     /**
-     * Genera un código aleatorio seguro de 8 caracteres alfanuméricos
+     * Genera un código aleatorio de 8 caracteres alfanuméricos
      */
-    private String generarCodigoAleatorioSeguro() {
-        String caracteresSeguros = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
-        java.security.SecureRandom random = new java.security.SecureRandom();
+    private String generarCodigoAleatorio() {
+        String chars = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
         StringBuilder codigo = new StringBuilder(8);
+        java.util.Random random = new java.util.Random();
         
         for (int i = 0; i < 8; i++) {
-            int indice = random.nextInt(caracteresSeguros.length());
-            codigo.append(caracteresSeguros.charAt(indice));
+            codigo.append(chars.charAt(random.nextInt(chars.length())));
+        }
+        
+        return codigo.toString();
+    }
+    
+    /**
+     * Genera un código aleatorio de 8 caracteres alfanuméricos con semilla
+     * Esto hace que el código sea más determinístico para el mismo usuario
+     */
+    private String generarCodigoAleatorioConSemilla(long semilla) {
+        String chars = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
+        StringBuilder codigo = new StringBuilder(8);
+        java.util.Random random = new java.util.Random(semilla);
+        
+        for (int i = 0; i < 8; i++) {
+            codigo.append(chars.charAt(random.nextInt(chars.length())));
         }
         
         return codigo.toString();
@@ -83,23 +105,35 @@ public class ReferidoService {
     
     /**
      * Obtiene o crea el código de referido de un usuario
-     * Garantiza que cada usuario tenga un código único
+     * El código es único y persistente para cada usuario
      */
     @Transactional
     public String obtenerCodigoReferido(Long usuarioId) {
-        Usuario usuario = usuarioRepository.findById(usuarioId)
-            .orElseThrow(() -> new RuntimeException("Usuario no encontrado"));
-        
-        if (usuario.getCodigoReferido() == null || usuario.getCodigoReferido().isEmpty()) {
-            // Generar código único con validación de colisiones
-            String codigo = generarCodigoReferidoMejorado(usuarioId);
+        try {
+            Usuario usuario = usuarioRepository.findById(usuarioId)
+                .orElseThrow(() -> new RuntimeException("Usuario no encontrado con ID: " + usuarioId));
+            
+            // Si el usuario ya tiene un código, retornarlo (persistente)
+            if (usuario.getCodigoReferido() != null && !usuario.getCodigoReferido().trim().isEmpty()) {
+                log.debug("Código de referido existente para usuario {}: {}", usuarioId, usuario.getCodigoReferido());
+                return usuario.getCodigoReferido();
+            }
+            
+            // Generar código único solo si no existe
+            log.info("Generando nuevo código de referido para usuario {}", usuarioId);
+            String codigo = generarCodigoReferido(usuarioId);
             usuario.setCodigoReferido(codigo);
-            usuarioRepository.save(usuario);
-            log.info("Código de referido generado para usuario {}: {}", usuarioId, codigo);
+            
+            // Guardar con flush para asegurar persistencia inmediata
+            usuario = usuarioRepository.saveAndFlush(usuario);
+            
+            log.info("Código de referido generado y guardado para usuario {}: {}", usuarioId, codigo);
             return codigo;
+            
+        } catch (Exception e) {
+            log.error("Error al obtener/generar código de referido para usuario {}: {}", usuarioId, e.getMessage(), e);
+            throw new RuntimeException("Error al obtener código de referido: " + e.getMessage(), e);
         }
-        
-        return usuario.getCodigoReferido();
     }
     
     /**
@@ -188,18 +222,24 @@ public class ReferidoService {
         
         long totalReferidos = referidos.size();
         long referidosActivos = referidos.stream()
-            .filter(Referido::getActivo)
+            .filter(r -> r.getActivo() != null && r.getActivo())
             .count();
         
         BigDecimal totalRecompensas = calcularRecompensas(referidos);
         long recompensasPendientes = referidos.stream()
-            .filter(r -> r.getMontoGenerado().compareTo(BigDecimal.ZERO) > 0 && !r.getActivo())
+            .filter(r -> {
+                BigDecimal monto = r.getMontoGenerado();
+                if (monto == null) return false;
+                Boolean activo = r.getActivo();
+                return monto.compareTo(BigDecimal.ZERO) > 0 && (activo == null || !activo);
+            })
             .count();
         
         java.util.Map<String, Object> stats = new java.util.HashMap<>();
         stats.put("totalReferidos", totalReferidos);
         stats.put("referidosActivos", referidosActivos);
-        stats.put("totalRecompensas", totalRecompensas);
+        // Convertir BigDecimal a double para serialización JSON correcta
+        stats.put("totalRecompensas", totalRecompensas.doubleValue());
         stats.put("recompensasPendientes", recompensasPendientes);
         
         return stats;
@@ -217,12 +257,15 @@ public class ReferidoService {
         }
         
         // Por cada referido activo: $100,000
-        long activos = referidos.stream().filter(Referido::getActivo).count();
+        long activos = referidos.stream()
+            .filter(r -> r.getActivo() != null && r.getActivo())
+            .count();
         total = total.add(new BigDecimal("100000").multiply(new BigDecimal(activos)));
         
         // 5% del monto generado por referidos
         BigDecimal montoTotalGenerado = referidos.stream()
             .map(Referido::getMontoGenerado)
+            .filter(m -> m != null)
             .reduce(BigDecimal.ZERO, BigDecimal::add);
         
         BigDecimal porcentaje = montoTotalGenerado.multiply(new BigDecimal("0.05"));

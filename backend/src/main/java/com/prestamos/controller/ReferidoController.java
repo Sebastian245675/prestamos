@@ -36,9 +36,9 @@ public class ReferidoController {
             return ResponseEntity.ok(response);
             
         } catch (Exception e) {
-            log.error("Error al obtener código de referido: {}", e.getMessage());
+            log.error("Error al obtener código de referido: ", e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                .body(Map.of("error", true, "message", "Error al obtener código de referido"));
+                .body(Map.of("error", true, "message", "Error al obtener código de referido: " + e.getMessage()));
         }
     }
     
@@ -55,16 +55,26 @@ public class ReferidoController {
                 .map(ref -> {
                     Map<String, Object> data = new HashMap<>();
                     data.put("id", ref.getId());
-                    data.put("nombre", ref.getReferido().getNombreCompleto());
-                    data.put("email", ref.getReferido().getEmail());
-                    data.put("fechaRegistro", ref.getFechaRegistro().toString());
-                    data.put("estado", ref.getActivo() ? "ACTIVO" : "INACTIVO");
-                    data.put("montoGenerado", ref.getMontoGenerado());
+                    
+                    // Validar que el referido no sea null
+                    if (ref.getReferido() != null) {
+                        data.put("nombre", ref.getReferido().getNombreCompleto());
+                        data.put("email", ref.getReferido().getEmail());
+                    } else {
+                        data.put("nombre", "N/A");
+                        data.put("email", "N/A");
+                        log.warn("Referido con ID {} tiene referencia null", ref.getId());
+                    }
+                    
+                    data.put("fechaRegistro", ref.getFechaRegistro() != null ? ref.getFechaRegistro().toString() : "");
+                    data.put("estado", ref.getActivo() != null && ref.getActivo() ? "ACTIVO" : "INACTIVO");
+                    data.put("montoGenerado", ref.getMontoGenerado() != null ? ref.getMontoGenerado() : java.math.BigDecimal.ZERO);
                     
                     // Calcular recompensa (5% del monto generado)
-                    java.math.BigDecimal recompensa = ref.getMontoGenerado().multiply(new java.math.BigDecimal("0.05"));
+                    java.math.BigDecimal monto = ref.getMontoGenerado() != null ? ref.getMontoGenerado() : java.math.BigDecimal.ZERO;
+                    java.math.BigDecimal recompensa = monto.multiply(new java.math.BigDecimal("0.05"));
                     data.put("recompensa", recompensa);
-                    data.put("estadoRecompensa", ref.getMontoGenerado().compareTo(java.math.BigDecimal.ZERO) > 0 ? "PENDIENTE" : "PENDIENTE");
+                    data.put("estadoRecompensa", monto.compareTo(java.math.BigDecimal.ZERO) > 0 ? "PENDIENTE" : "PENDIENTE");
                     
                     return data;
                 })
@@ -73,9 +83,9 @@ public class ReferidoController {
             return ResponseEntity.ok(referidosData);
             
         } catch (Exception e) {
-            log.error("Error al obtener referidos: {}", e.getMessage());
+            log.error("Error al obtener referidos: ", e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                .body(Map.of("error", true, "message", "Error al obtener referidos"));
+                .body(Map.of("error", true, "message", "Error al obtener referidos: " + e.getMessage()));
         }
     }
     
@@ -103,7 +113,9 @@ public class ReferidoController {
             }
             
             // Referidos activos
-            long activos = referidos.stream().filter(Referido::getActivo).count();
+            long activos = referidos.stream()
+                .filter(r -> r.getActivo() != null && r.getActivo())
+                .count();
             if (activos > 0) {
                 Map<String, Object> activa = new HashMap<>();
                 activa.put("id", 2);
@@ -118,6 +130,7 @@ public class ReferidoController {
             // 5% del monto generado
             java.math.BigDecimal montoTotal = referidos.stream()
                 .map(Referido::getMontoGenerado)
+                .filter(m -> m != null)
                 .reduce(java.math.BigDecimal.ZERO, java.math.BigDecimal::add);
             
             if (montoTotal.compareTo(java.math.BigDecimal.ZERO) > 0) {
@@ -146,9 +159,9 @@ public class ReferidoController {
             return ResponseEntity.ok(recompensas);
             
         } catch (Exception e) {
-            log.error("Error al obtener recompensas: {}", e.getMessage());
+            log.error("Error al obtener recompensas: ", e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                .body(Map.of("error", true, "message", "Error al obtener recompensas"));
+                .body(Map.of("error", true, "message", "Error al obtener recompensas: " + e.getMessage()));
         }
     }
     
@@ -163,9 +176,9 @@ public class ReferidoController {
             return ResponseEntity.ok(stats);
             
         } catch (Exception e) {
-            log.error("Error al obtener estadísticas: {}", e.getMessage());
+            log.error("Error al obtener estadísticas: ", e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                .body(Map.of("error", true, "message", "Error al obtener estadísticas"));
+                .body(Map.of("error", true, "message", "Error al obtener estadísticas: " + e.getMessage()));
         }
     }
 }

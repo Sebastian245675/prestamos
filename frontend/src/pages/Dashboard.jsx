@@ -315,13 +315,13 @@ export default function Dashboard() {
           </p>
         </div>
         <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
-          <Link
-            to="/prestamos/nuevo"
+        <Link
+          to="/prestamos/nuevo"
             className="btn-primary inline-flex items-center justify-center gap-2 w-full sm:w-auto"
-          >
+        >
             <Plus size={18} />
-            <span>Nuevo Préstamo</span>
-          </Link>
+          <span>Nuevo Préstamo</span>
+        </Link>
           <Link
             to="/movimientos"
             className="btn-secondary inline-flex items-center justify-center gap-2 w-full sm:w-auto"
@@ -349,8 +349,8 @@ export default function Dashboard() {
             </div>
             <div className="w-12 h-12 rounded-2xl bg-white/60 backdrop-blur flex items-center justify-center shadow-inner">
               {stat.icon}
-            </div>
           </div>
+        </div>
         ))}
       </div>
 
@@ -363,22 +363,22 @@ export default function Dashboard() {
             className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm transition hover:shadow-md flex flex-col gap-4"
           >
             <div className="flex items-start justify-between">
-              <div>
+            <div>
                 <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">
                   {card.label}
                 </p>
                 <p className={`text-3xl font-bold mt-2 ${card.color}`}>
                   {Number(card.value || 0).toLocaleString('es-CO')}
                 </p>
-              </div>
+            </div>
               <div className={`w-12 h-12 rounded-xl flex items-center justify-center shadow-inner ${card.iconBg}`}>
                 {card.icon}
-              </div>
             </div>
+          </div>
             <div className="flex items-center text-sm font-medium text-primary-600">
-              Ver detalles <ArrowRight size={16} className="ml-1" />
-            </div>
-          </Link>
+            Ver detalles <ArrowRight size={16} className="ml-1" />
+          </div>
+        </Link>
         ))}
       </div>
 
@@ -390,17 +390,17 @@ export default function Dashboard() {
             <div className="flex items-center justify-between sm:justify-start sm:space-x-2">
               <Activity className="text-primary-600 hidden sm:block" size={24} />
               <h2 className="text-xl sm:text-2xl font-bold text-gray-900">Movimientos financieros</h2>
-            </div>
+              </div>
             <div className="flex flex-wrap items-center gap-2">
-              <Link
-                to="/movimientos"
+              <Link 
+                to="/movimientos" 
                 className="btn-secondary inline-flex items-center gap-2 text-xs sm:text-sm"
               >
                 <BarChart3 size={16} />
                 <span>Ver detalles</span>
               </Link>
-              <Link
-                to="/movimientos"
+              <Link 
+                to="/movimientos" 
                 className="btn-primary inline-flex items-center gap-2 text-xs sm:text-sm"
               >
                 <Plus size={16} />

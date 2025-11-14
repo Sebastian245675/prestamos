@@ -22,7 +22,17 @@ import { format } from 'date-fns'
 
 export default function Referidos() {
   const { user } = useAuth()
-  const [codigoReferido, setCodigoReferido] = useState('')
+  
+  // Inicializar código desde localStorage si existe
+  const getCodigoGuardado = () => {
+    if (user?.id) {
+      const codigoGuardado = localStorage.getItem(`codigoReferido_${user.id}`)
+      return codigoGuardado || ''
+    }
+    return ''
+  }
+  
+  const [codigoReferido, setCodigoReferido] = useState(getCodigoGuardado())
   const [referidos, setReferidos] = useState([])
   const [recompensas, setRecompensas] = useState([])
   const [estadisticas, setEstadisticas] = useState({
@@ -34,81 +44,18 @@ export default function Referidos() {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    fetchReferidosData()
-  }, [])
+    if (user?.id) {
+      fetchReferidosData()
+    }
+  }, [user?.id])
 
   const fetchReferidosData = async () => {
     try {
-      // Mock data
-      const mockCodigo = user?.id ? `REF-${user.id.toString().padStart(6, '0')}-${Date.now().toString(36).toUpperCase()}` : 'REF-000001-A1B2C3'
-      const mockReferidos = [
-        {
-          id: 1,
-          nombre: 'Juan Pérez',
-          email: 'juan.perez@email.com',
-          fechaRegistro: '2024-01-15',
-          estado: 'ACTIVO',
-          montoGenerado: 5000000,
-          recompensa: 250000,
-          estadoRecompensa: 'PENDIENTE'
-        },
-        {
-          id: 2,
-          nombre: 'María García',
-          email: 'maria.garcia@email.com',
-          fechaRegistro: '2024-02-20',
-          estado: 'ACTIVO',
-          montoGenerado: 3000000,
-          recompensa: 150000,
-          estadoRecompensa: 'PAGADA'
-        },
-        {
-          id: 3,
-          nombre: 'Carlos López',
-          email: 'carlos.lopez@email.com',
-          fechaRegistro: '2024-03-10',
-          estado: 'INACTIVO',
-          montoGenerado: 0,
-          recompensa: 0,
-          estadoRecompensa: 'PENDIENTE'
-        }
-      ]
-
-      const mockRecompensas = [
-        {
-          id: 1,
-          tipo: 'PRIMER_REFERIDO',
-          descripcion: 'Por tu primer referido',
-          monto: 50000,
-          estado: 'DISPONIBLE',
-          fecha: null
-        },
-        {
-          id: 2,
-          tipo: 'REFERIDO_ACTIVO',
-          descripcion: 'Por cada referido activo con préstamo',
-          monto: 100000,
-          estado: 'DISPONIBLE',
-          fecha: null
-        },
-        {
-          id: 3,
-          tipo: 'MONTO_GENERADO',
-          descripcion: '5% del monto generado por referidos',
-          monto: 0,
-          estado: 'PENDIENTE',
-          fecha: null
-        },
-        {
-          id: 4,
-          tipo: 'BONUS_MENSUAL',
-          descripcion: 'Bonus mensual por 5+ referidos activos',
-          monto: 200000,
-          estado: 'PAGADA',
-          fecha: '2024-01-31'
-        }
-      ]
-
+      setLoading(true)
+      
+      // Intentar cargar el código guardado desde localStorage como fallback
+      const codigoGuardado = localStorage.getItem(`codigoReferido_${user?.id}`)
+      
       try {
         const [codigoRes, referidosRes, recompensasRes, statsRes] = await Promise.all([
           api.get('/referidos/codigo'),
@@ -116,23 +63,63 @@ export default function Referidos() {
           api.get('/referidos/recompensas'),
           api.get('/referidos/estadisticas')
         ])
-        setCodigoReferido(codigoRes.data.codigo)
-        setReferidos(referidosRes.data)
-        setRecompensas(recompensasRes.data)
-        setEstadisticas(statsRes.data)
-      } catch (e) {
-        setCodigoReferido(mockCodigo)
-        setReferidos(mockReferidos)
-        setRecompensas(mockRecompensas)
-        setEstadisticas({
-          totalReferidos: mockReferidos.length,
-          referidosActivos: mockReferidos.filter(r => r.estado === 'ACTIVO').length,
-          totalRecompensas: mockRecompensas.filter(r => r.estado === 'PAGADA').reduce((sum, r) => sum + r.monto, 0),
-          recompensasPendientes: mockRecompensas.filter(r => r.estado === 'PENDIENTE' || r.estado === 'DISPONIBLE').length
+        
+        // Guardar el código en localStorage para persistencia
+        if (codigoRes.data?.codigo) {
+          localStorage.setItem(`codigoReferido_${user?.id}`, codigoRes.data.codigo)
+          setCodigoReferido(codigoRes.data.codigo)
+        } else if (codigoGuardado) {
+          setCodigoReferido(codigoGuardado)
+        } else {
+          setCodigoReferido(`Cargando...`)
+        }
+        
+        setReferidos(referidosRes.data || [])
+        setRecompensas(recompensasRes.data || [])
+        setEstadisticas(statsRes.data || {
+          totalReferidos: 0,
+          referidosActivos: 0,
+          totalRecompensas: 0,
+          recompensasPendientes: 0
         })
+      } catch (apiError) {
+        // Si hay un error de API pero tenemos código guardado, usarlo
+        if (codigoGuardado) {
+          setCodigoReferido(codigoGuardado)
+          setReferidos([])
+          setRecompensas([])
+          setEstadisticas({
+            totalReferidos: 0,
+            referidosActivos: 0,
+            totalRecompensas: 0,
+            recompensasPendientes: 0
+          })
+          toast.warning('No se pudo conectar con el servidor. Mostrando datos guardados.')
+          return
+        }
+        throw apiError
       }
     } catch (error) {
-      toast.error('Error al cargar datos de referidos')
+      console.error('Error al cargar datos de referidos:', error)
+      
+      // Intentar usar código guardado como último recurso
+      const codigoGuardado = localStorage.getItem(`codigoReferido_${user?.id}`)
+      if (codigoGuardado) {
+        setCodigoReferido(codigoGuardado)
+        toast.warning('No se pudo conectar con el servidor. Mostrando código guardado.')
+      } else {
+        setCodigoReferido('Error al cargar')
+        toast.error('Error al cargar datos de referidos. Verifica tu conexión.')
+      }
+      
+      setReferidos([])
+      setRecompensas([])
+      setEstadisticas({
+        totalReferidos: 0,
+        referidosActivos: 0,
+        totalRecompensas: 0,
+        recompensasPendientes: 0
+      })
     } finally {
       setLoading(false)
     }
@@ -227,7 +214,7 @@ export default function Referidos() {
           },
           {
             label: 'Total recompensas',
-            value: `$${estadisticas.totalRecompensas.toLocaleString('es-CO')}`,
+            value: `$${(estadisticas.totalRecompensas || 0).toLocaleString('es-CO')}`,
             icon: <DollarSign size={18} className="text-purple-600" />,
             gradient: 'from-purple-50 to-pink-50 border-purple-200',
           },
@@ -247,10 +234,10 @@ export default function Referidos() {
                 {label}
               </p>
               <p className="text-base sm:text-xl font-bold text-gray-900">{value}</p>
-            </div>
+        </div>
             <div className="w-9 h-9 rounded-xl bg-white/70 backdrop-blur flex items-center justify-center">
               {icon}
-            </div>
+        </div>
           </div>
         ))}
       </div>
@@ -268,7 +255,7 @@ export default function Referidos() {
               <p className="text-sm text-gray-600">Comparte este código con tus amigos</p>
               <div className="w-full overflow-x-auto">
                 <code className="block w-max max-w-full text-base sm:text-3xl font-bold text-primary-700 font-mono bg-white px-4 py-2 rounded-lg border-2 border-primary-300 mx-auto sm:mx-0 break-all">
-                {codigoReferido}
+                  {codigoReferido}
                 </code>
               </div>
               <p className="text-xs text-gray-500">

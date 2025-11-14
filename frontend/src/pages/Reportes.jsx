@@ -180,8 +180,8 @@ export default function Reportes() {
                 </div>
                 <div className="w-9 h-9 rounded-xl bg-white/70 backdrop-blur flex items-center justify-center">
                   {icon}
-                </div>
               </div>
+            </div>
             ))}
           </div>
 

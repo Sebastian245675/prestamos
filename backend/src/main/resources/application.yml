@@ -4,10 +4,10 @@ spring:
   
   datasource:
     # Configuración para Supabase (Proyecto: ijjskcroggxijvxronqy)
-    # Usar pooler compartido (grupo de sesiones) para conexiones desde IPv4
-    url: ${SPRING_DATASOURCE_URL}
-    username: ${SPRING_DATASOURCE_USERNAME}
-    password: ${SPRING_DATASOURCE_PASSWORD}
+    # Agrupador de transacciones - Ideal para aplicaciones sin estado
+    url: jdbc:postgresql://aws-1-us-east-1.pooler.supabase.com:6543/postgres
+    username: postgres.ijjskcroggxijvxronqy
+    password: juan123A.zxsds
     driver-class-name: org.postgresql.Driver
     hikari:
       maximum-pool-size: 5

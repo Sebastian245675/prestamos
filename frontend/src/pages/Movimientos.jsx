@@ -270,12 +270,12 @@ export default function Movimientos() {
           ? formData.descripcion
           : `Pago de nómina - ${formData.nominaRuta}`
       }
-
+      
       if (isNaN(monto) || monto <= 0) {
         toast.error('El monto debe ser mayor a cero')
         return
       }
-
+      
       const payload = {
         tipo: formData.tipo,
         monto,
@@ -1242,31 +1242,31 @@ export default function Movimientos() {
 
               {/* Monto - Optimizado para móvil */}
               {!(formData.tipo === 'SALIDA' && formData.categoria === 'PAGO_NOMINA') && (
-                <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-3">
-                    Monto *
-                  </label>
-                  <div className="relative">
-                    <span className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-600 font-semibold text-lg">
-                      $
-                    </span>
-                    <input
-                      type="text"
-                      value={formData.monto}
-                      onChange={(e) => {
-                        const formatted = formatMontoInput(e.target.value)
-                        setFormData({ ...formData, monto: formatted })
-                      }}
-                      className="input-field pl-12 text-lg h-14 sm:h-12"
-                      required
-                      placeholder="0.000 o 0,00"
-                      inputMode="decimal"
-                    />
-                    <p className="text-xs text-gray-500 mt-1">
-                      Formato: 40.000 o 40.000,50 (punto para miles, coma para decimales)
-                    </p>
-                  </div>
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-3">
+                  Monto *
+                </label>
+                <div className="relative">
+                  <span className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-600 font-semibold text-lg">
+                    $
+                  </span>
+                  <input
+                    type="text"
+                    value={formData.monto}
+                    onChange={(e) => {
+                      const formatted = formatMontoInput(e.target.value)
+                      setFormData({ ...formData, monto: formatted })
+                    }}
+                    className="input-field pl-12 text-lg h-14 sm:h-12"
+                    required
+                    placeholder="0.000 o 0,00"
+                    inputMode="decimal"
+                  />
+                  <p className="text-xs text-gray-500 mt-1">
+                    Formato: 40.000 o 40.000,50 (punto para miles, coma para decimales)
+                  </p>
                 </div>
+              </div>
               )}
 
               {/* Método de Pago - Optimizado para móvil */}

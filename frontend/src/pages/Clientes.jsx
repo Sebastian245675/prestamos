@@ -366,11 +366,11 @@ export default function Clientes() {
             <div className="flex items-center gap-2">
               <div className="w-8 h-8 rounded-lg bg-gray-100 flex items-center justify-center">
                 {icon}
-              </div>
-              <p className="text-[11px] sm:text-xs font-semibold uppercase tracking-wide text-gray-500">{label}</p>
             </div>
-            <p className="text-base sm:text-lg font-semibold text-gray-900">{value}</p>
+              <p className="text-[11px] sm:text-xs font-semibold uppercase tracking-wide text-gray-500">{label}</p>
           </div>
+            <p className="text-base sm:text-lg font-semibold text-gray-900">{value}</p>
+        </div>
         ))}
       </div>
 
