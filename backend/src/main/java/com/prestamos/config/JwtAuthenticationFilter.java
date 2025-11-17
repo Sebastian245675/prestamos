@@ -36,7 +36,34 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         
         // Permitir rutas públicas sin verificar token
         String path = request.getRequestURI();
-        if (path.startsWith("/api/auth/") || path.startsWith("/api/public/")) {
+        String servletPath = request.getServletPath() != null ? request.getServletPath() : "";
+        String pathInfo = request.getPathInfo() != null ? request.getPathInfo() : "";
+        
+        // Construir path relativo al context path (Spring Security ve rutas sin /api)
+        String relativePath = servletPath + pathInfo;
+        
+        // Si path completo incluye /api, extraer la parte relativa
+        if (path.startsWith("/api") && !relativePath.startsWith("/")) {
+            relativePath = path.substring(4); // Remover "/api"
+        }
+        
+        // Normalizar: asegurar que empiece con /
+        if (!relativePath.startsWith("/")) {
+            relativePath = "/" + relativePath;
+        }
+        
+        // Verificar rutas públicas (comparar tanto con path completo como relativo)
+        boolean isPublicRoute = relativePath.startsWith("/auth/") || 
+                               relativePath.startsWith("/public/") || 
+                               relativePath.startsWith("/payment/") ||
+                               path.startsWith("/api/auth/") || 
+                               path.startsWith("/api/public/") || 
+                               path.startsWith("/api/payment/") ||
+                               path.equals("/api/auth/register") ||
+                               path.equals("/api/auth/login");
+        
+        if (isPublicRoute) {
+            log.debug("Ruta pública detectada, saltando verificación JWT: {}", path);
             filterChain.doFilter(request, response);
             return;
         }

@@ -48,10 +48,10 @@ public class UsuarioService {
         
         if ("ANUAL".equals(request.getTipoSuscripcion())) {
             fechaVencimiento = fechaInicio.plusYears(1);
-            monto = new BigDecimal("270000");
+            monto = new BigDecimal("432000"); // 40,000 * 12 * 0.9 (10% descuento)
         } else {
             fechaVencimiento = fechaInicio.plusMonths(1);
-            monto = new BigDecimal("30000");
+            monto = new BigDecimal("40000"); // 40,000 COP mensual
         }
         
         usuario.setFechaSuscripcion(fechaInicio);

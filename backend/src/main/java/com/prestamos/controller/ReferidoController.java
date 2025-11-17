@@ -7,6 +7,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.HashMap;
@@ -23,26 +24,43 @@ public class ReferidoController {
     private final SecurityUtils securityUtils;
     
     @GetMapping("/codigo")
+    @Transactional
     public ResponseEntity<?> obtenerCodigoReferido() {
         try {
             Long userId = securityUtils.getCurrentUserId()
-                .orElseThrow(() -> new RuntimeException("Usuario no autenticado"));
+                .orElseThrow(() -> {
+                    log.error("Usuario no autenticado al intentar obtener código de referido");
+                    return new RuntimeException("Usuario no autenticado");
+                });
             
+            log.debug("Obteniendo código de referido para usuario ID: {}", userId);
             String codigo = referidoService.obtenerCodigoReferido(userId);
+            
+            if (codigo == null || codigo.trim().isEmpty()) {
+                log.error("El código de referido está vacío para usuario ID: {}", userId);
+                return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(Map.of("error", true, "message", "Error al generar código de referido"));
+            }
             
             Map<String, String> response = new HashMap<>();
             response.put("codigo", codigo);
             
+            log.debug("Código de referido obtenido exitosamente para usuario ID: {} - Código: {}", userId, codigo);
             return ResponseEntity.ok(response);
             
-        } catch (Exception e) {
+        } catch (RuntimeException e) {
             log.error("Error al obtener código de referido: ", e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(Map.of("error", true, "message", e.getMessage()));
+        } catch (Exception e) {
+            log.error("Error inesperado al obtener código de referido: ", e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                 .body(Map.of("error", true, "message", "Error al obtener código de referido: " + e.getMessage()));
         }
     }
     
     @GetMapping
+    @Transactional(readOnly = true)
     public ResponseEntity<?> obtenerReferidos() {
         try {
             Long userId = securityUtils.getCurrentUserId()
@@ -90,6 +108,7 @@ public class ReferidoController {
     }
     
     @GetMapping("/recompensas")
+    @Transactional(readOnly = true)
     public ResponseEntity<?> obtenerRecompensas() {
         try {
             Long userId = securityUtils.getCurrentUserId()
@@ -166,6 +185,7 @@ public class ReferidoController {
     }
     
     @GetMapping("/estadisticas")
+    @Transactional(readOnly = true)
     public ResponseEntity<?> obtenerEstadisticas() {
         try {
             Long userId = securityUtils.getCurrentUserId()

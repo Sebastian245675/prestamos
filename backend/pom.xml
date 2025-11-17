@@ -109,6 +109,13 @@
             <version>8.0.2</version>
             <type>pom</type>
         </dependency>
+        
+        <!-- PayPal SDK -->
+        <dependency>
+            <groupId>com.paypal.sdk</groupId>
+            <artifactId>rest-api-sdk</artifactId>
+            <version>1.14.0</version>
+        </dependency>
     </dependencies>
     
     <build>

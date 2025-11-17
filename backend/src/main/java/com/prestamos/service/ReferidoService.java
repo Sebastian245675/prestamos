@@ -66,8 +66,14 @@ public class ReferidoService {
         } catch (Exception e) {
             log.warn("Error al generar UUID basado en ID, usando método alternativo: {}", e.getMessage());
             // Método alternativo: usar hash del ID del usuario
-            String hash = String.valueOf(Math.abs(usuarioId.hashCode()));
-            String suffix = hash.length() >= 8 ? hash.substring(0, 8) : hash + "X".repeat(8 - hash.length());
+            long hashValue = Math.abs(usuarioId ^ (usuarioId >>> 32)); // Mejor distribución que hashCode()
+            String hash = String.valueOf(hashValue);
+            String suffix;
+            if (hash.length() >= 8) {
+                suffix = hash.substring(0, 8);
+            } else {
+                suffix = String.format("%-8s", hash).replace(' ', 'X');
+            }
             return baseCodigo + suffix.toUpperCase();
         }
     }
@@ -110,8 +116,17 @@ public class ReferidoService {
     @Transactional
     public String obtenerCodigoReferido(Long usuarioId) {
         try {
+            if (usuarioId == null) {
+                log.error("Usuario ID es null");
+                throw new RuntimeException("Usuario ID no puede ser null");
+            }
+            
+            log.debug("Buscando usuario con ID: {}", usuarioId);
             Usuario usuario = usuarioRepository.findById(usuarioId)
-                .orElseThrow(() -> new RuntimeException("Usuario no encontrado con ID: " + usuarioId));
+                .orElseThrow(() -> {
+                    log.error("Usuario no encontrado con ID: {}", usuarioId);
+                    return new RuntimeException("Usuario no encontrado con ID: " + usuarioId);
+                });
             
             // Si el usuario ya tiene un código, retornarlo (persistente)
             if (usuario.getCodigoReferido() != null && !usuario.getCodigoReferido().trim().isEmpty()) {
@@ -122,16 +137,26 @@ public class ReferidoService {
             // Generar código único solo si no existe
             log.info("Generando nuevo código de referido para usuario {}", usuarioId);
             String codigo = generarCodigoReferido(usuarioId);
+            
+            if (codigo == null || codigo.trim().isEmpty()) {
+                log.error("No se pudo generar un código válido para usuario {}", usuarioId);
+                throw new RuntimeException("Error al generar código de referido: código generado está vacío");
+            }
+            
             usuario.setCodigoReferido(codigo);
             
             // Guardar con flush para asegurar persistencia inmediata
+            log.debug("Guardando código de referido para usuario {}: {}", usuarioId, codigo);
             usuario = usuarioRepository.saveAndFlush(usuario);
             
-            log.info("Código de referido generado y guardado para usuario {}: {}", usuarioId, codigo);
+            log.info("Código de referido generado y guardado exitosamente para usuario {}: {}", usuarioId, codigo);
             return codigo;
             
-        } catch (Exception e) {
+        } catch (RuntimeException e) {
             log.error("Error al obtener/generar código de referido para usuario {}: {}", usuarioId, e.getMessage(), e);
+            throw e;
+        } catch (Exception e) {
+            log.error("Error inesperado al obtener/generar código de referido para usuario {}: {}", usuarioId, e.getMessage(), e);
             throw new RuntimeException("Error al obtener código de referido: " + e.getMessage(), e);
         }
     }

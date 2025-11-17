@@ -2,6 +2,7 @@ import { Routes, Route, Navigate } from 'react-router-dom'
 import { AuthProvider, useAuth } from './context/AuthContext'
 import Login from './pages/auth/Login'
 import Register from './pages/auth/Register'
+import PaymentSuccess from './pages/PaymentSuccess'
 import Dashboard from './pages/Dashboard'
 import Prestamos from './pages/Prestamos'
 import NuevoPrestamo from './pages/NuevoPrestamo'
@@ -36,6 +37,8 @@ function AppRoutes() {
     <Routes>
       <Route path="/login" element={!user ? <Login /> : <Navigate to="/dashboard" />} />
       <Route path="/register" element={!user ? <Register /> : <Navigate to="/dashboard" />} />
+      <Route path="/payment/success" element={<PaymentSuccess />} />
+      <Route path="/payment/cancel" element={<Navigate to="/register" />} />
       <Route path="/cliente/:id" element={<ClientePortal />} />
       
       {user ? (

@@ -68,3 +68,21 @@ logging:
     console: "%d{yyyy-MM-dd HH:mm:ss} - %msg%n"
     file: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n"
 
+# Configuración de PayPal
+paypal:
+  client-id: ${PAYPAL_CLIENT_ID:AVBPR6ce1KmQT3Ur1i5ndmaO9T3CHp8HgD-1N8aX SDr4rr60-gYJQE0Vhvd4WfKKDM9vGX6ZdzuCKXVX}
+  client-secret: ${PAYPAL_CLIENT_SECRET:EC00Gzs_NyMjctiDojg6_QKRplHiBo_RzgL7688p wf8wAUPb-zjdRal_QpZqfDOQDTEumwaqNKu-kIpk}
+  mode: ${PAYPAL_MODE:sandbox}  # sandbox o live
+  base-url: ${PAYPAL_BASE_URL:https://api.sandbox.paypal.com}
+  return-url: ${PAYPAL_RETURN_URL:http://localhost:5173/payment/success}
+  cancel-url: ${PAYPAL_CANCEL_URL:http://localhost:5173/payment/cancel}
+  subscription:
+    mensual:
+      precio: 40000
+      currency: COP
+      descripcion: Suscripción Mensual - PrestaCol
+    anual:
+      precio: 432000  # 40,000 * 12 * 0.9 (10% descuento)
+      currency: COP
+      descripcion: Suscripción Anual - PrestaCol
+

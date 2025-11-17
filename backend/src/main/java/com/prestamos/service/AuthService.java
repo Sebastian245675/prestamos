@@ -5,14 +5,17 @@ import com.prestamos.config.JwtUtil;
 import com.prestamos.dto.AuthResponse;
 import com.prestamos.dto.LoginRequest;
 import com.prestamos.dto.RegisterRequest;
+import com.prestamos.entity.RegistroPendiente;
 import com.prestamos.entity.Usuario;
-import com.prestamos.service.ReferidoService;
+import com.prestamos.repository.RegistroPendienteRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.HashMap;
+import java.util.Map;
 import java.util.Optional;
 
 @Service
@@ -22,6 +25,8 @@ public class AuthService {
     
     private final UsuarioService usuarioService;
     private final ReferidoService referidoService;
+    private final PayPalService payPalService;
+    private final RegistroPendienteRepository registroPendienteRepository;
     private final PasswordEncoder passwordEncoder;
     private final JwtUtil jwtUtil;
     private final InputSanitizer inputSanitizer;
@@ -83,7 +88,7 @@ public class AuthService {
     }
     
     @Transactional
-    public AuthResponse register(RegisterRequest request) {
+    public Map<String, Object> iniciarRegistro(RegisterRequest request) {
         try {
             // Sanitizar y validar email
             String email = inputSanitizer.sanitizeEmail(request.getEmail());
@@ -92,6 +97,12 @@ public class AuthService {
             if (usuarioService.findByEmail(email).isPresent()) {
                 log.warn("Intento de registro con email ya existente: {}", email);
                 throw new RuntimeException("El email ya está registrado");
+            }
+            
+            // Validar que no haya un registro pendiente con el mismo email
+            Optional<RegistroPendiente> registroExistente = registroPendienteRepository.findByEmail(email);
+            if (registroExistente.isPresent() && "PENDIENTE".equals(registroExistente.get().getEstado())) {
+                throw new RuntimeException("Ya existe un registro pendiente para este email. Verifica tu correo o espera a que expire.");
             }
             
             // Sanitizar nombre
@@ -112,34 +123,38 @@ public class AuthService {
                 throw new RuntimeException("Tipo de suscripción inválido");
             }
             
-            // Crear usuario
-            RegisterRequest sanitizedRequest = new RegisterRequest();
-            sanitizedRequest.setEmail(email);
-            sanitizedRequest.setNombreCompleto(nombreCompleto);
-            sanitizedRequest.setTelefono(telefono);
-            sanitizedRequest.setPassword(request.getPassword()); // Se encriptará en el servicio
-            sanitizedRequest.setTipoSuscripcion(tipoSuscripcion);
+            // Crear orden de pago en PayPal
+            Map<String, Object> ordenPago = payPalService.createOrder(tipoSuscripcion, email, nombreCompleto);
+            String paypalOrderId = (String) ordenPago.get("orderId");
+            String approvalUrl = (String) ordenPago.get("approvalUrl");
             
-            Usuario usuario = usuarioService.crearPrestamista(sanitizedRequest);
+            // Guardar registro pendiente
+            RegistroPendiente registroPendiente = new RegistroPendiente();
+            registroPendiente.setEmail(email);
+            registroPendiente.setNombreCompleto(nombreCompleto);
+            registroPendiente.setTelefono(telefono);
+            registroPendiente.setPassword(passwordEncoder.encode(request.getPassword()));
+            registroPendiente.setTipoSuscripcion(tipoSuscripcion);
+            registroPendiente.setPaypalOrderId(paypalOrderId);
+            registroPendiente.setEstado("PENDIENTE");
             
-            // Procesar referido si se proporcionó código
             if (request.getCodigoReferido() != null && !request.getCodigoReferido().trim().isEmpty()) {
-                try {
-                    String codigoReferido = inputSanitizer.sanitize(request.getCodigoReferido().trim());
-                    referidoService.procesarReferido(usuario.getId(), codigoReferido);
-                    log.info("Referido procesado para usuario {} con código {}", email, codigoReferido);
-                } catch (Exception e) {
-                    log.warn("Error al procesar referido para usuario {}: {}", email, e.getMessage());
-                    // No fallar el registro si hay error con el referido
-                }
+                registroPendiente.setCodigoReferido(inputSanitizer.sanitize(request.getCodigoReferido().trim()));
             }
             
-            // Generar token
-            String token = jwtUtil.generateToken(usuario.getEmail());
+            registroPendienteRepository.save(registroPendiente);
             
-            log.info("Registro exitoso para usuario: {}", email);
+            log.info("Registro pendiente creado para usuario: {} con orden PayPal: {}", email, paypalOrderId);
             
-            return new AuthResponse(token, AuthResponse.UserInfo.fromUsuario(usuario));
+            // Retornar información de la orden de pago
+            Map<String, Object> response = new HashMap<>();
+            response.put("paypalOrderId", paypalOrderId);
+            response.put("approvalUrl", approvalUrl);
+            response.put("precio", ordenPago.get("precio"));
+            response.put("tipoSuscripcion", tipoSuscripcion);
+            response.put("message", "Por favor completa el pago para finalizar tu registro");
+            
+            return response;
             
         } catch (IllegalArgumentException e) {
             log.error("Error de validación en registro: {}", e.getMessage());
@@ -147,8 +162,90 @@ public class AuthService {
         } catch (RuntimeException e) {
             throw e;
         } catch (Exception e) {
-            log.error("Error inesperado en registro: {}", e.getMessage());
-            throw new RuntimeException("Error al registrarse. Intenta nuevamente");
+            log.error("Error inesperado en registro: {}", e.getMessage(), e);
+            throw new RuntimeException("Error al iniciar registro. Intenta nuevamente");
+        }
+    }
+    
+    @Transactional
+    public AuthResponse completarRegistro(String paypalOrderId) {
+        try {
+            // Buscar registro pendiente
+            RegistroPendiente registroPendiente = registroPendienteRepository.findByPaypalOrderId(paypalOrderId)
+                .orElseThrow(() -> new RuntimeException("Registro pendiente no encontrado"));
+            
+            if (!"PENDIENTE".equals(registroPendiente.getEstado())) {
+                throw new RuntimeException("Este registro ya fue procesado o cancelado");
+            }
+            
+            // Capturar el pago en PayPal
+            Map<String, Object> captura = payPalService.captureOrder(paypalOrderId);
+            String captureId = (String) captura.get("captureId");
+            
+            // Actualizar registro pendiente
+            registroPendiente.setPaypalCaptureId(captureId);
+            registroPendiente.setEstado("PAGADO");
+            registroPendiente.setFechaPago(java.time.LocalDateTime.now());
+            registroPendienteRepository.save(registroPendiente);
+            
+            // Crear el usuario final
+            RegisterRequest registerRequest = new RegisterRequest();
+            registerRequest.setEmail(registroPendiente.getEmail());
+            registerRequest.setNombreCompleto(registroPendiente.getNombreCompleto());
+            registerRequest.setTelefono(registroPendiente.getTelefono());
+            registerRequest.setTipoSuscripcion(registroPendiente.getTipoSuscripcion());
+            registerRequest.setCodigoReferido(registroPendiente.getCodigoReferido());
+            
+            // El password ya está encriptado en registroPendiente, necesitamos guardarlo directamente
+            Usuario usuario = new Usuario();
+            usuario.setEmail(registroPendiente.getEmail());
+            usuario.setPassword(registroPendiente.getPassword()); // Ya está encriptado
+            usuario.setNombreCompleto(registroPendiente.getNombreCompleto());
+            usuario.setTelefono(registroPendiente.getTelefono());
+            usuario.setRol(Usuario.RolUsuario.PRESTAMISTA);
+            usuario.setActivo(true);
+            
+            java.time.LocalDate fechaInicio = java.time.LocalDate.now();
+            java.time.LocalDate fechaVencimiento;
+            
+            if ("ANUAL".equals(registroPendiente.getTipoSuscripcion())) {
+                fechaVencimiento = fechaInicio.plusYears(1);
+            } else {
+                fechaVencimiento = fechaInicio.plusMonths(1);
+            }
+            
+            usuario.setFechaSuscripcion(fechaInicio);
+            usuario.setFechaVencimientoSuscripcion(fechaVencimiento);
+            usuario.setSuscripcionActiva(true);
+            
+            usuario = usuarioService.save(usuario);
+            
+            // Generar código de referido
+            String codigoReferido = referidoService.obtenerCodigoReferido(usuario.getId());
+            usuario.setCodigoReferido(codigoReferido);
+            usuario = usuarioService.save(usuario);
+            
+            // Procesar referido si se proporcionó código
+            if (registroPendiente.getCodigoReferido() != null && !registroPendiente.getCodigoReferido().trim().isEmpty()) {
+                try {
+                    referidoService.procesarReferido(usuario.getId(), registroPendiente.getCodigoReferido());
+                    log.info("Referido procesado para usuario {} con código {}", usuario.getEmail(), registroPendiente.getCodigoReferido());
+                } catch (Exception e) {
+                    log.warn("Error al procesar referido para usuario {}: {}", usuario.getEmail(), e.getMessage());
+                    // No fallar el registro si hay error con el referido
+                }
+            }
+            
+            // Generar token
+            String token = jwtUtil.generateToken(usuario.getEmail());
+            
+            log.info("Registro completado exitosamente para usuario: {} con captura PayPal: {}", usuario.getEmail(), captureId);
+            
+            return new AuthResponse(token, AuthResponse.UserInfo.fromUsuario(usuario));
+            
+        } catch (Exception e) {
+            log.error("Error al completar registro: {}", e.getMessage(), e);
+            throw new RuntimeException("Error al completar el registro: " + e.getMessage());
         }
     }
 }

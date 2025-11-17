@@ -97,6 +97,19 @@ export const AuthProvider = ({ children }) => {
         codigoReferido: userData.codigoReferido || null
       })
 
+      // El nuevo flujo retorna approvalUrl para pagar con PayPal
+      if (response.data && response.data.approvalUrl) {
+        return { 
+          success: true, 
+          requiresPayment: true,
+          approvalUrl: response.data.approvalUrl,
+          paypalOrderId: response.data.paypalOrderId,
+          precio: response.data.precio,
+          tipoSuscripcion: response.data.tipoSuscripcion
+        }
+      }
+
+      // Si ya tiene token (flujo antiguo o pago ya completado)
       if (response.data && response.data.token) {
         const { token, user: registeredUser } = response.data
         
@@ -114,12 +127,45 @@ export const AuthProvider = ({ children }) => {
         localStorage.setItem('user', JSON.stringify(userToStore))
         setUser(userToStore)
         
-        return { success: true }
+        return { success: true, requiresPayment: false }
       }
 
       return { success: false, error: 'Error al registrarse' }
     } catch (error) {
       const message = error.response?.data?.message || error.message || 'Error al registrarse'
+      return { success: false, error: message }
+    }
+  }
+
+  const confirmPayment = async (orderId) => {
+    try {
+      const response = await api.post('/payment/confirm', null, {
+        params: { orderId }
+      })
+
+      if (response.data && response.data.token) {
+        const { token, user: userData } = response.data
+        
+        // Guardar token y usuario
+        localStorage.setItem('token', token)
+        const userToStore = {
+          id: userData.id,
+          email: userData.email,
+          nombreCompleto: userData.nombreCompleto,
+          telefono: userData.telefono,
+          rol: userData.rol,
+          suscripcionActiva: userData.suscripcionActiva,
+          permisos: userData.permisos || {}
+        }
+        localStorage.setItem('user', JSON.stringify(userToStore))
+        setUser(userToStore)
+        
+        return { success: true }
+      }
+
+      return { success: false, error: 'Error al confirmar el pago' }
+    } catch (error) {
+      const message = error.response?.data?.message || error.message || 'Error al confirmar el pago'
       return { success: false, error: message }
     }
   }
@@ -140,6 +186,7 @@ export const AuthProvider = ({ children }) => {
     loading,
     login,
     register,
+    confirmPayment,
     logout,
   }
 

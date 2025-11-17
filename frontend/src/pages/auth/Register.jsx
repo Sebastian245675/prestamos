@@ -145,13 +145,24 @@ export default function Register() {
     })
     
     if (result.success) {
-      toast.success('¡Registro exitoso!')
-      navigate('/dashboard')
+      // Si requiere pago, redirigir a PayPal
+      if (result.requiresPayment && result.approvalUrl) {
+        toast.info('Redirigiendo a PayPal para completar el pago...')
+        // Guardar el orderId en localStorage por si acaso
+        if (result.paypalOrderId) {
+          localStorage.setItem('pendingOrderId', result.paypalOrderId)
+        }
+        // Redirigir a PayPal
+        window.location.href = result.approvalUrl
+      } else {
+        // Si no requiere pago (caso antiguo), redirigir al dashboard
+        toast.success('¡Registro exitoso!')
+        navigate('/dashboard')
+      }
     } else {
       toast.error(result.error)
+      setLoading(false)
     }
-    
-    setLoading(false)
   }
 
   return (
@@ -512,13 +523,13 @@ export default function Register() {
                       required
                       autoFocus
                     >
-                      <option value="MENSUAL">Mensual - $30.000/mes</option>
-                      <option value="ANUAL">Anual - $270.000/año (Ahorras $90.000)</option>
+                      <option value="MENSUAL">Mensual - $40.000/mes</option>
+                      <option value="ANUAL">Anual - $432.000/año (Ahorras $48.000)</option>
                     </select>
                     <p className="text-xs text-gray-500 mt-2">
                       {formData.tipoSuscripcion === 'MENSUAL' 
-                        ? 'Pago mensual recurrente de $30.000'
-                        : 'Ahorra $90.000 pagando el año completo'
+                        ? 'Pago mensual recurrente de $40.000 COP'
+                        : 'Ahorra $48.000 pagando el año completo'
                       }
                     </p>
                   </div>
