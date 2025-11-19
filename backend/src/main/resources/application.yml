@@ -49,6 +49,7 @@ spring:
       cache-spec: maximumSize=500,expireAfterWrite=10m
 
 server:
+  address: 0.0.0.0  # Escuchar en todas las interfaces (necesario para fly.io)
   port: 8080
   servlet:
     context-path: /api
