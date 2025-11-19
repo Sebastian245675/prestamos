@@ -35,16 +35,29 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             throws ServletException, IOException {
         
         // Permitir rutas públicas sin verificar token
-        String path = request.getRequestURI();
+        // Con context-path /api, Spring Security ve las rutas sin el prefijo
+        // request.getRequestURI() = "/api/auth/register" (ruta completa)
+        // request.getServletPath() = "/api" (context-path)
+        // request.getPathInfo() = "/auth/register" (ruta relativa al context-path) o null
+        
+        String pathInfo = request.getPathInfo();
         String servletPath = request.getServletPath() != null ? request.getServletPath() : "";
-        String pathInfo = request.getPathInfo() != null ? request.getPathInfo() : "";
+        String requestURI = request.getRequestURI();
         
-        // Construir path relativo al context path (Spring Security ve rutas sin /api)
-        String relativePath = servletPath + pathInfo;
-        
-        // Si path completo incluye /api, extraer la parte relativa
-        if (path.startsWith("/api") && !relativePath.startsWith("/")) {
-            relativePath = path.substring(4); // Remover "/api"
+        // Construir path relativo (lo que Spring Security ve)
+        // Si pathInfo no es null, usarlo directamente (es lo que Spring Security ve)
+        // Si pathInfo es null, extraer de requestURI removiendo el servletPath
+        String relativePath;
+        if (pathInfo != null && !pathInfo.isEmpty()) {
+            relativePath = pathInfo;
+        } else if (servletPath.equals("/api") && requestURI.startsWith("/api/")) {
+            // Si pathInfo es null pero tenemos context-path /api, extraer de requestURI
+            relativePath = requestURI.substring(4); // Remover "/api"
+        } else if (requestURI.startsWith("/api/")) {
+            // Fallback: extraer directamente de requestURI
+            relativePath = requestURI.substring(4);
+        } else {
+            relativePath = requestURI;
         }
         
         // Normalizar: asegurar que empiece con /
@@ -52,18 +65,20 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             relativePath = "/" + relativePath;
         }
         
-        // Verificar rutas públicas (comparar tanto con path completo como relativo)
+        // Verificar rutas públicas (Spring Security ve rutas sin /api)
         boolean isPublicRoute = relativePath.startsWith("/auth/") || 
                                relativePath.startsWith("/public/") || 
                                relativePath.startsWith("/payment/") ||
-                               path.startsWith("/api/auth/") || 
-                               path.startsWith("/api/public/") || 
-                               path.startsWith("/api/payment/") ||
-                               path.equals("/api/auth/register") ||
-                               path.equals("/api/auth/login");
+                               relativePath.equals("/auth/register") ||
+                               relativePath.equals("/auth/login") ||
+                               // También verificar con /api por si acaso
+                               requestURI.startsWith("/api/auth/") || 
+                               requestURI.startsWith("/api/public/") || 
+                               requestURI.startsWith("/api/payment/");
         
         if (isPublicRoute) {
-            log.debug("Ruta pública detectada, saltando verificación JWT: {}", path);
+            log.debug("Ruta pública detectada, saltando verificación JWT: URI={}, PathInfo={}, Relative={}", 
+                     requestURI, pathInfo, relativePath);
             filterChain.doFilter(request, response);
             return;
         }
@@ -87,23 +102,23 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                         
                         SecurityContextHolder.getContext().setAuthentication(authentication);
                         
-                        log.info("JWT válido para usuario: {} en ruta: {}", email, path);
+                        log.info("JWT válido para usuario: {} en ruta: {}", email, requestURI);
                     } else {
-                        log.warn("JWT inválido recibido desde IP: {} en ruta: {}", getClientIp(request), path);
+                        log.warn("JWT inválido recibido desde IP: {} en ruta: {}", getClientIp(request), requestURI);
                         sendErrorResponse(response, "Token inválido o expirado", HttpStatus.UNAUTHORIZED);
                         return;
                     }
                 } catch (Exception tokenEx) {
-                    log.error("Error al procesar token JWT en ruta {}: {}", path, tokenEx.getMessage());
+                    log.error("Error al procesar token JWT en ruta {}: {}", requestURI, tokenEx.getMessage());
                     sendErrorResponse(response, "Token inválido o expirado", HttpStatus.UNAUTHORIZED);
                     return;
                 }
             } else {
-                log.warn("No se encontró token JWT en la petición a ruta: {}", path);
+                log.warn("No se encontró token JWT en la petición a ruta: {}", requestURI);
             }
             // Si no hay token, dejar que Spring Security maneje la autorización
         } catch (Exception ex) {
-            log.error("Error inesperado en filtro JWT en ruta {}: {}", path, ex.getMessage(), ex);
+            log.error("Error inesperado en filtro JWT en ruta {}: {}", requestURI, ex.getMessage(), ex);
             // En caso de error inesperado, dejar que Spring Security maneje la autorización
             // No bloquear la petición para evitar que el servidor se caiga
         }

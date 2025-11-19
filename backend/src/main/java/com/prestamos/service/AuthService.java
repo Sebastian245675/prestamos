@@ -174,8 +174,18 @@ public class AuthService {
             RegistroPendiente registroPendiente = registroPendienteRepository.findByPaypalOrderId(paypalOrderId)
                 .orElseThrow(() -> new RuntimeException("Registro pendiente no encontrado"));
             
+            // Si ya fue procesado, buscar el usuario y retornar token
             if (!"PENDIENTE".equals(registroPendiente.getEstado())) {
-                throw new RuntimeException("Este registro ya fue procesado o cancelado");
+                log.info("Registro ya procesado para orden: {}, buscando usuario existente", paypalOrderId);
+                Optional<Usuario> usuarioOpt = usuarioService.findByEmail(registroPendiente.getEmail());
+                if (usuarioOpt.isPresent()) {
+                    Usuario usuario = usuarioOpt.get();
+                    String token = jwtUtil.generateToken(usuario.getEmail());
+                    log.info("Retornando token para usuario ya registrado: {}", usuario.getEmail());
+                    return new AuthResponse(token, AuthResponse.UserInfo.fromUsuario(usuario));
+                } else {
+                    throw new RuntimeException("Registro procesado pero usuario no encontrado");
+                }
             }
             
             // Capturar el pago en PayPal
@@ -188,37 +198,40 @@ public class AuthService {
             registroPendiente.setFechaPago(java.time.LocalDateTime.now());
             registroPendienteRepository.save(registroPendiente);
             
-            // Crear el usuario final
-            RegisterRequest registerRequest = new RegisterRequest();
-            registerRequest.setEmail(registroPendiente.getEmail());
-            registerRequest.setNombreCompleto(registroPendiente.getNombreCompleto());
-            registerRequest.setTelefono(registroPendiente.getTelefono());
-            registerRequest.setTipoSuscripcion(registroPendiente.getTipoSuscripcion());
-            registerRequest.setCodigoReferido(registroPendiente.getCodigoReferido());
+            // Verificar si el usuario ya existe antes de crearlo
+            Optional<Usuario> usuarioExistente = usuarioService.findByEmail(registroPendiente.getEmail());
+            Usuario usuario;
             
-            // El password ya está encriptado en registroPendiente, necesitamos guardarlo directamente
-            Usuario usuario = new Usuario();
-            usuario.setEmail(registroPendiente.getEmail());
-            usuario.setPassword(registroPendiente.getPassword()); // Ya está encriptado
-            usuario.setNombreCompleto(registroPendiente.getNombreCompleto());
-            usuario.setTelefono(registroPendiente.getTelefono());
-            usuario.setRol(Usuario.RolUsuario.PRESTAMISTA);
-            usuario.setActivo(true);
-            
-            java.time.LocalDate fechaInicio = java.time.LocalDate.now();
-            java.time.LocalDate fechaVencimiento;
-            
-            if ("ANUAL".equals(registroPendiente.getTipoSuscripcion())) {
-                fechaVencimiento = fechaInicio.plusYears(1);
+            if (usuarioExistente.isPresent()) {
+                // Usuario ya existe, usar el existente
+                usuario = usuarioExistente.get();
+                log.info("Usuario ya existe, usando el existente: {}", usuario.getEmail());
             } else {
-                fechaVencimiento = fechaInicio.plusMonths(1);
+                // Crear el usuario final
+                usuario = new Usuario();
+                usuario.setEmail(registroPendiente.getEmail());
+                usuario.setPassword(registroPendiente.getPassword()); // Ya está encriptado
+                usuario.setNombreCompleto(registroPendiente.getNombreCompleto());
+                usuario.setTelefono(registroPendiente.getTelefono());
+                usuario.setRol(Usuario.RolUsuario.PRESTAMISTA);
+                usuario.setActivo(true);
+                
+                java.time.LocalDate fechaInicio = java.time.LocalDate.now();
+                java.time.LocalDate fechaVencimiento;
+                
+                if ("ANUAL".equals(registroPendiente.getTipoSuscripcion())) {
+                    fechaVencimiento = fechaInicio.plusYears(1);
+                } else {
+                    fechaVencimiento = fechaInicio.plusMonths(1);
+                }
+                
+                usuario.setFechaSuscripcion(fechaInicio);
+                usuario.setFechaVencimientoSuscripcion(fechaVencimiento);
+                usuario.setSuscripcionActiva(true);
+                
+                usuario = usuarioService.save(usuario);
+                log.info("Usuario creado exitosamente: {}", usuario.getEmail());
             }
-            
-            usuario.setFechaSuscripcion(fechaInicio);
-            usuario.setFechaVencimientoSuscripcion(fechaVencimiento);
-            usuario.setSuscripcionActiva(true);
-            
-            usuario = usuarioService.save(usuario);
             
             // Generar código de referido
             String codigoReferido = referidoService.obtenerCodigoReferido(usuario.getId());

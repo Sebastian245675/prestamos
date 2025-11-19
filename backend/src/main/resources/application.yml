@@ -5,9 +5,10 @@ spring:
   datasource:
     # Configuración para Supabase (Proyecto: ijjskcroggxijvxronqy)
     # Agrupador de transacciones - Ideal para aplicaciones sin estado
-    url: jdbc:postgresql://aws-1-us-east-1.pooler.supabase.com:6543/postgres
-    username: postgres.ijjskcroggxijvxronqy
-    password: juan123A.zxsds
+    # Las credenciales se cargan desde el archivo .env
+    url: ${spring.datasource.url:${DB_URL:jdbc:postgresql://aws-1-us-east-1.pooler.supabase.com:6543/postgres?sslmode=require&prepareThreshold=0}}
+    username: ${spring.datasource.username:${DB_USERNAME:postgres.ijjskcroggxijvxronqy}}
+    password: ${spring.datasource.password:${DB_PASSWORD:454aA34345//}}
     driver-class-name: org.postgresql.Driver
     hikari:
       maximum-pool-size: 5
@@ -16,6 +17,9 @@ spring:
       idle-timeout: 300000
       max-lifetime: 900000
       leak-detection-threshold: 60000
+      # Configuración para Transaction pooler de Supabase (no soporta PREPARE statements)
+      data-source-properties:
+        prepareThreshold: 0
   
   jpa:
     hibernate:
@@ -60,8 +64,9 @@ jwt:
 
 logging:
   level:
-    org.springframework.security: INFO
-    com.prestamos: INFO
+    org.springframework.security: DEBUG
+    com.prestamos: DEBUG
+    com.prestamos.config.JwtAuthenticationFilter: DEBUG
     org.hibernate.SQL: WARN
     org.hibernate.type.descriptor.sql.BasicBinder: WARN
   pattern:
@@ -70,19 +75,19 @@ logging:
 
 # Configuración de PayPal
 paypal:
-  client-id: ${PAYPAL_CLIENT_ID:AVBPR6ce1KmQT3Ur1i5ndmaO9T3CHp8HgD-1N8aX SDr4rr60-gYJQE0Vhvd4WfKKDM9vGX6ZdzuCKXVX}
-  client-secret: ${PAYPAL_CLIENT_SECRET:EC00Gzs_NyMjctiDojg6_QKRplHiBo_RzgL7688p wf8wAUPb-zjdRal_QpZqfDOQDTEumwaqNKu-kIpk}
+  client-id: ${PAYPAL_CLIENT_ID:AX2nl02zQcnkC_mftgTTchd3Hk8LduxeNkViOzmQ29ebkM5AHGIYABa81uyHFN7CItYTO5eyiAsiXr4W}
+  client-secret: ${PAYPAL_CLIENT_SECRET:ENVR3ly7dmW_MSew_lJPTGaEPokr0WOT4LofgSABmW1gjqhxqDUWg8MWZ5DEfdeK7g2fgommTXAgSp7r}
   mode: ${PAYPAL_MODE:sandbox}  # sandbox o live
   base-url: ${PAYPAL_BASE_URL:https://api.sandbox.paypal.com}
-  return-url: ${PAYPAL_RETURN_URL:http://localhost:5173/payment/success}
-  cancel-url: ${PAYPAL_CANCEL_URL:http://localhost:5173/payment/cancel}
+  return-url: ${PAYPAL_RETURN_URL:http://localhost:3000/payment/success}
+  cancel-url: ${PAYPAL_CANCEL_URL:http://localhost:3000/payment/cancel}
   subscription:
     mensual:
-      precio: 40000
-      currency: COP
+      precio: 10  # 40,000 COP ≈ 10 USD (aproximado)
+      currency: USD
       descripcion: Suscripción Mensual - PrestaCol
     anual:
-      precio: 432000  # 40,000 * 12 * 0.9 (10% descuento)
-      currency: COP
+      precio: 108  # 432,000 COP ≈ 108 USD (aproximado, 10 USD * 12 * 0.9)
+      currency: USD
       descripcion: Suscripción Anual - PrestaCol
 

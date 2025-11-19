@@ -68,19 +68,23 @@ public class SecurityConfig {
             
             // Autorización de requests
             .authorizeHttpRequests(auth -> auth
-                // Endpoints públicos
+                // Endpoints públicos (sin context-path /api)
                 .requestMatchers("/auth/**", "/public/**", "/payment/**").permitAll()
+                // También permitir con context-path por si acaso
+                .requestMatchers("/api/auth/**", "/api/public/**", "/api/payment/**").permitAll()
+                // Permitir endpoint de error para que los errores de validación no generen 403
+                .requestMatchers("/error", "/api/error").permitAll()
                 .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                 
                 // Endpoints protegidos
-                .requestMatchers("/prestamos/**").authenticated()
-                .requestMatchers("/abonos/**").authenticated()
-                .requestMatchers("/movimientos/**").authenticated()
-                .requestMatchers("/cobradores/**").authenticated()
-                .requestMatchers("/reportes/**").authenticated()
-                .requestMatchers("/referidos/**").authenticated()
-                .requestMatchers("/rutas/**").authenticated()
-                .requestMatchers("/notificaciones/**").authenticated()
+                .requestMatchers("/prestamos/**", "/api/prestamos/**").authenticated()
+                .requestMatchers("/abonos/**", "/api/abonos/**").authenticated()
+                .requestMatchers("/movimientos/**", "/api/movimientos/**").authenticated()
+                .requestMatchers("/cobradores/**", "/api/cobradores/**").authenticated()
+                .requestMatchers("/reportes/**", "/api/reportes/**").authenticated()
+                .requestMatchers("/referidos/**", "/api/referidos/**").authenticated()
+                .requestMatchers("/rutas/**", "/api/rutas/**").authenticated()
+                .requestMatchers("/notificaciones/**", "/api/notificaciones/**").authenticated()
                 
                 // Todo lo demás requiere autenticación
                 .anyRequest().authenticated()
