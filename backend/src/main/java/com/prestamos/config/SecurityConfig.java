@@ -100,11 +100,19 @@ public class SecurityConfig {
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
         
-        // Orígenes permitidos (configurar según necesidades)
+        // Obtener FRONTEND_URL de variables de entorno, con valores por defecto
+        String frontendUrl = System.getenv("FRONTEND_URL");
+        if (frontendUrl == null || frontendUrl.isEmpty()) {
+            frontendUrl = "https://prestacol-frontend.fly.dev";
+        }
+        
+        // Orígenes permitidos (desarrollo y producción)
         configuration.setAllowedOrigins(Arrays.asList(
             "http://localhost:3000",
             "http://localhost:5173",
-            "http://localhost:8080"
+            "http://localhost:8080",
+            frontendUrl,
+            "https://prestacol-frontend.fly.dev"
         ));
         
         // Métodos HTTP permitidos
