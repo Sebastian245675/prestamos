@@ -26,17 +26,15 @@ import java.util.Arrays;
 @EnableMethodSecurity(prePostEnabled = true)
 public class SecurityConfig {
     
-    @Autowired
-    @Lazy
-    private JwtAuthenticationFilter jwtAuthenticationFilter;
-    
     @Bean
     public PasswordEncoder passwordEncoder() {
         return new BCryptPasswordEncoder(12); // Alto costo para mayor seguridad
     }
     
     @Bean
-    public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
+    public SecurityFilterChain securityFilterChain(
+            HttpSecurity http,
+            @Lazy JwtAuthenticationFilter jwtAuthenticationFilter) throws Exception {
         http
             // Deshabilitar CSRF para APIs REST (JWT maneja la autenticación)
             .csrf(AbstractHttpConfigurer::disable)
