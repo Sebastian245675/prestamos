@@ -10,6 +10,7 @@ import com.prestamos.service.UsuarioService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -29,6 +30,7 @@ public class CobradorController {
     private final UsuarioService usuarioService;
     private final PrestamoRepository prestamoRepository;
     private final SecurityUtils securityUtils;
+    @Lazy
     private final PasswordEncoder passwordEncoder;
     
     @GetMapping
