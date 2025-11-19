@@ -1,6 +1,6 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useAuth } from '../context/AuthContext'
-import axios from 'axios'
+import api from '../utils/api'
 import { toast } from 'react-toastify'
 import { User, Mail, Phone, Calendar, CreditCard, Shield, Save, Edit2, Lock, Bell } from 'lucide-react'
 
@@ -9,6 +9,7 @@ export default function Perfil() {
   const [activeTab, setActiveTab] = useState('personal')
   const [loading, setLoading] = useState(false)
   const [editMode, setEditMode] = useState(false)
+  const [loadingSuscripcion, setLoadingSuscripcion] = useState(true)
 
   // Datos del perfil
   const [perfilData, setPerfilData] = useState({
@@ -25,12 +26,41 @@ export default function Perfil() {
   // Datos de suscripción
   const [suscripcion, setSuscripcion] = useState({
     tipo: 'MENSUAL',
-    fechaInicio: '2024-01-01',
-    fechaVencimiento: '2024-02-01',
-    estado: 'ACTIVA',
-    monto: 30000,
-    proximoPago: '2024-02-01'
+    fechaInicio: null,
+    fechaVencimiento: null,
+    estado: 'SIN_SUSCRIPCION',
+    monto: 40000,
+    montoCOP: 40000
   })
+
+  // Cargar datos de suscripción
+  useEffect(() => {
+    const cargarSuscripcion = async () => {
+      try {
+        setLoadingSuscripcion(true)
+        const response = await api.get('/suscripciones')
+        if (response.data && response.data.tipo) {
+          setSuscripcion({
+            tipo: response.data.tipo,
+            fechaInicio: response.data.fechaInicio,
+            fechaVencimiento: response.data.fechaVencimiento,
+            estado: response.data.estado,
+            monto: response.data.montoCOP ? parseFloat(response.data.montoCOP) : (response.data.tipo === 'ANUAL' ? 432000 : 40000),
+            montoCOP: response.data.montoCOP ? parseFloat(response.data.montoCOP) : (response.data.tipo === 'ANUAL' ? 432000 : 40000)
+          })
+        }
+      } catch (error) {
+        console.error('Error al cargar suscripción:', error)
+        // Mantener valores por defecto
+      } finally {
+        setLoadingSuscripcion(false)
+      }
+    }
+
+    if (user) {
+      cargarSuscripcion()
+    }
+  }, [user])
 
   // Cambio de contraseña
   const [passwordData, setPasswordData] = useState({
@@ -353,9 +383,11 @@ export default function Perfil() {
                       </h3>
                       <p className="text-sm text-gray-600 mt-1">
                         Estado: <span className={`font-medium ${
-                          suscripcion.estado === 'ACTIVA' ? 'text-green-700' : 'text-red-700'
+                          suscripcion.estado === 'ACTIVA' ? 'text-green-700' : 
+                          suscripcion.estado === 'SIN_SUSCRIPCION' ? 'text-gray-700' : 'text-red-700'
                         }`}>
-                          {suscripcion.estado === 'ACTIVA' ? 'Activa' : 'Vencida'}
+                          {suscripcion.estado === 'ACTIVA' ? 'Activa' : 
+                           suscripcion.estado === 'SIN_SUSCRIPCION' ? 'Sin Suscripción' : 'Vencida'}
                         </span>
                       </p>
                     </div>
@@ -373,13 +405,17 @@ export default function Perfil() {
                     <div>
                       <p className="text-sm text-gray-600">Fecha de Inicio</p>
                       <p className="font-medium text-gray-900">
-                        {new Date(suscripcion.fechaInicio).toLocaleDateString('es-CO')}
+                        {suscripcion.fechaInicio 
+                          ? new Date(suscripcion.fechaInicio).toLocaleDateString('es-CO')
+                          : 'N/A'}
                       </p>
                     </div>
                     <div>
                       <p className="text-sm text-gray-600">Fecha de Vencimiento</p>
                       <p className="font-medium text-gray-900">
-                        {new Date(suscripcion.fechaVencimiento).toLocaleDateString('es-CO')}
+                        {suscripcion.fechaVencimiento 
+                          ? new Date(suscripcion.fechaVencimiento).toLocaleDateString('es-CO')
+                          : 'N/A'}
                       </p>
                     </div>
                   </div>
@@ -401,7 +437,7 @@ export default function Perfil() {
                           </span>
                         )}
                       </div>
-                      <p className="text-2xl font-bold text-gray-900 mb-1">$30.000</p>
+                      <p className="text-2xl font-bold text-gray-900 mb-1">$40.000</p>
                       <p className="text-sm text-gray-600">/mes</p>
                     </div>
 
@@ -418,9 +454,9 @@ export default function Perfil() {
                           </span>
                         )}
                       </div>
-                      <p className="text-2xl font-bold text-gray-900 mb-1">$270.000</p>
+                      <p className="text-2xl font-bold text-gray-900 mb-1">$432.000</p>
                       <p className="text-sm text-gray-600">/año</p>
-                      <p className="text-xs text-green-600 mt-1">Ahorras $90.000</p>
+                      <p className="text-xs text-green-600 mt-1">Ahorras $48.000</p>
                     </div>
                   </div>
                   <button className="mt-4 btn-primary">

@@ -26,6 +26,7 @@ public class AuthService {
     private final UsuarioService usuarioService;
     private final ReferidoService referidoService;
     private final PayPalService payPalService;
+    private final SuscripcionService suscripcionService;
     private final RegistroPendienteRepository registroPendienteRepository;
     private final PasswordEncoder passwordEncoder;
     private final JwtUtil jwtUtil;
@@ -247,6 +248,39 @@ public class AuthService {
                     log.warn("Error al procesar referido para usuario {}: {}", usuario.getEmail(), e.getMessage());
                     // No fallar el registro si hay error con el referido
                 }
+            }
+            
+            // Crear registro de suscripción en la tabla suscripciones
+            try {
+                // Obtener el monto del pago desde la captura de PayPal
+                java.math.BigDecimal monto = null;
+                Map<String, Object> amount = (Map<String, Object>) captura.get("amount");
+                if (amount != null && amount.get("value") != null) {
+                    try {
+                        String valueStr = amount.get("value").toString();
+                        monto = new java.math.BigDecimal(valueStr);
+                    } catch (Exception e) {
+                        log.warn("No se pudo parsear el monto de PayPal: {}", amount.get("value"));
+                    }
+                }
+                
+                // Si no se pudo obtener el monto, usar el precio por defecto según el tipo
+                if (monto == null) {
+                    monto = registroPendiente.getTipoSuscripcion().equals("ANUAL") 
+                        ? new java.math.BigDecimal("108") // 108 USD anual
+                        : new java.math.BigDecimal("10"); // 10 USD mensual
+                }
+                
+                suscripcionService.crearSuscripcion(
+                    usuario.getId(),
+                    registroPendiente.getTipoSuscripcion(),
+                    monto
+                );
+                log.info("Suscripción creada para usuario: {} - Tipo: {} - Monto: {}", 
+                    usuario.getEmail(), registroPendiente.getTipoSuscripcion(), monto);
+            } catch (Exception e) {
+                log.error("Error al crear suscripción para usuario {}: {}", usuario.getEmail(), e.getMessage(), e);
+                // No fallar el registro si hay error creando la suscripción (ya está en el usuario)
             }
             
             // Generar token

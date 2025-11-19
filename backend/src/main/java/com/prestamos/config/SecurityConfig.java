@@ -85,6 +85,7 @@ public class SecurityConfig {
                 .requestMatchers("/referidos/**", "/api/referidos/**").authenticated()
                 .requestMatchers("/rutas/**", "/api/rutas/**").authenticated()
                 .requestMatchers("/notificaciones/**", "/api/notificaciones/**").authenticated()
+                .requestMatchers("/suscripciones/**", "/api/suscripciones/**").authenticated()
                 
                 // Todo lo demás requiere autenticación
                 .anyRequest().authenticated()
