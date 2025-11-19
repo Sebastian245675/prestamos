@@ -1,7 +1,8 @@
 spring:
   application:
     name: prestacol-backend
-  
+  main:
+    allow-circular-references: true
   datasource:
     # Configuración para Supabase (Proyecto: ijjskcroggxijvxronqy)
     # Agrupador de transacciones - Ideal para aplicaciones sin estado
