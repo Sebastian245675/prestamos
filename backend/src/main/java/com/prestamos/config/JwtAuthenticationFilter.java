@@ -29,6 +29,8 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
     private final JwtUtil jwtUtil;
     private final ObjectMapper objectMapper;
+    private final com.prestamos.service.UsuarioService usuarioService;
+    private final com.prestamos.service.SuscripcionService suscripcionService;
 
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
@@ -91,6 +93,70 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                     if (jwtUtil.validateToken(jwt)) {
                         String email = jwtUtil.getEmailFromToken(jwt);
                         
+                        // Verificar que el usuario existe y tiene suscripción activa
+                        java.util.Optional<com.prestamos.entity.Usuario> usuarioOpt = usuarioService.findByEmail(email);
+                        
+                        if (usuarioOpt.isEmpty()) {
+                            log.warn("Usuario no encontrado con email: {} en ruta: {}", email, requestURI);
+                            sendErrorResponse(response, "Usuario no encontrado", HttpStatus.UNAUTHORIZED);
+                            return;
+                        }
+                        
+                        com.prestamos.entity.Usuario usuario = usuarioOpt.get();
+                        
+                        // Verificar que el usuario esté activo
+                        if (!usuario.getActivo()) {
+                            log.warn("Usuario inactivo intentando acceder: {} en ruta: {}", email, requestURI);
+                            sendErrorResponse(response, "Usuario inactivo. Contacta al administrador", HttpStatus.FORBIDDEN);
+                            return;
+                        }
+                        
+                        // Verificar suscripción activa (excepto para rutas de suscripción y pago)
+                        boolean isSuscripcionRoute = relativePath.startsWith("/suscripciones") || 
+                                                     requestURI.startsWith("/api/suscripciones");
+                        boolean isPaymentRoute = relativePath.startsWith("/payment") || 
+                                                 requestURI.startsWith("/api/payment");
+                        
+                        // Solo permitir acceso sin verificar suscripción a rutas de suscripción y pago
+                        if (!isSuscripcionRoute && !isPaymentRoute) {
+                            // Usar método optimizado que verifica todo de una vez (con caché)
+                            boolean tieneSuscripcionActiva = suscripcionService.tieneSuscripcionActiva(usuario.getId());
+                            
+                            // Si no tiene suscripción activa, bloquear acceso
+                            if (!tieneSuscripcionActiva) {
+                                log.warn("Usuario sin suscripción activa intentando acceder: {} en ruta: {}", email, requestURI);
+                                
+                                // Sincronizar estado de forma asíncrona (no bloquea la respuesta)
+                                try {
+                                    // Solo sincronizar si detectamos una discrepancia (evita escrituras innecesarias)
+                                    if (usuario.getSuscripcionActiva()) {
+                                        // Ejecutar sincronización de forma asíncrona para no bloquear
+                                        new Thread(() -> {
+                                            try {
+                                                suscripcionService.sincronizarEstadoSuscripcion(usuario.getId());
+                                            } catch (Exception e) {
+                                                log.warn("Error al sincronizar estado de suscripción para usuario {}: {}", 
+                                                    usuario.getId(), e.getMessage());
+                                            }
+                                        }).start();
+                                    }
+                                } catch (Exception e) {
+                                    log.warn("Error al iniciar sincronización de suscripción: {}", e.getMessage());
+                                }
+                                
+                                Map<String, Object> errorData = new HashMap<>();
+                                errorData.put("error", true);
+                                errorData.put("message", "Suscripción vencida o inactiva. Por favor renueva tu suscripción para continuar usando la aplicación");
+                                errorData.put("status", HttpStatus.FORBIDDEN.value());
+                                errorData.put("code", "SUBSCRIPTION_EXPIRED");
+                                
+                                response.setStatus(HttpStatus.FORBIDDEN.value());
+                                response.setContentType(MediaType.APPLICATION_JSON_VALUE);
+                                objectMapper.writeValue(response.getWriter(), errorData);
+                                return;
+                            }
+                        }
+                        
                         // Crear autenticación
                         UsernamePasswordAuthenticationToken authentication = 
                             new UsernamePasswordAuthenticationToken(
@@ -102,7 +168,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                         
                         SecurityContextHolder.getContext().setAuthentication(authentication);
                         
-                        log.info("JWT válido para usuario: {} en ruta: {}", email, requestURI);
+                        log.debug("JWT válido y suscripción activa para usuario: {} en ruta: {}", email, requestURI);
                     } else {
                         log.warn("JWT inválido recibido desde IP: {} en ruta: {}", getClientIp(request), requestURI);
                         sendErrorResponse(response, "Token inválido o expirado", HttpStatus.UNAUTHORIZED);

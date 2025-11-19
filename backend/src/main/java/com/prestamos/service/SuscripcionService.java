@@ -6,6 +6,8 @@ import com.prestamos.repository.SuscripcionRepository;
 import com.prestamos.repository.UsuarioRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -25,6 +27,7 @@ public class SuscripcionService {
      * Crea una nueva suscripción para un usuario
      */
     @Transactional
+    @CacheEvict(value = "suscripciones", key = "#usuarioId")
     public Suscripcion crearSuscripcion(Long usuarioId, String tipoSuscripcion, BigDecimal monto) {
         Usuario usuario = usuarioRepository.findById(usuarioId)
             .orElseThrow(() -> new RuntimeException("Usuario no encontrado"));
@@ -70,12 +73,95 @@ public class SuscripcionService {
     }
     
     /**
-     * Obtiene la suscripción activa de un usuario
+     * Obtiene la suscripción activa de un usuario (con caché)
      */
     @Transactional(readOnly = true)
+    @Cacheable(value = "suscripciones", key = "#usuarioId")
     public Optional<Suscripcion> obtenerSuscripcionActiva(Long usuarioId) {
         return suscripcionRepository
             .findFirstByUsuarioIdAndEstadoOrderByFechaCreacionDesc(usuarioId, Suscripcion.EstadoSuscripcion.ACTIVA);
+    }
+    
+    /**
+     * Verifica si un usuario tiene suscripción activa (método optimizado para el filtro)
+     * Retorna true si tiene suscripción activa y no vencida
+     * Usa el caché de obtenerSuscripcionActiva internamente para mejorar rendimiento
+     */
+    @Transactional(readOnly = true)
+    public boolean tieneSuscripcionActiva(Long usuarioId) {
+        // Usar método con caché para evitar consultas repetidas
+        Optional<Suscripcion> suscripcionOpt = obtenerSuscripcionActiva(usuarioId);
+        
+        LocalDate hoy = LocalDate.now();
+        
+        if (suscripcionOpt.isPresent()) {
+            Suscripcion suscripcion = suscripcionOpt.get();
+            
+            // Verificar que el estado sea ACTIVA y que no esté vencida
+            if (suscripcion.getEstado() == Suscripcion.EstadoSuscripcion.ACTIVA &&
+                suscripcion.getFechaVencimiento() != null &&
+                !suscripcion.getFechaVencimiento().isBefore(hoy)) {
+                return true;
+            }
+            // Si está vencida, retornar false inmediatamente (no verificar usuario)
+            return false;
+        }
+        
+        // Si no hay suscripción activa en la tabla, verificar en el usuario (fallback rápido)
+        // Solo hacer una consulta ligera por ID, sin cargar relaciones
+        try {
+            Usuario usuario = usuarioRepository.findById(usuarioId).orElse(null);
+            if (usuario != null && 
+                usuario.getSuscripcionActiva() != null &&
+                usuario.getSuscripcionActiva() &&
+                usuario.getFechaVencimientoSuscripcion() != null &&
+                !usuario.getFechaVencimientoSuscripcion().isBefore(hoy)) {
+                return true;
+            }
+        } catch (Exception e) {
+            log.warn("Error al verificar suscripción del usuario {}: {}", usuarioId, e.getMessage());
+        }
+        
+        return false;
+    }
+    
+    /**
+     * Sincroniza el estado de suscripción del usuario con la tabla de suscripciones
+     * Solo actualiza si es necesario (evita escrituras innecesarias)
+     */
+    @Transactional
+    @CacheEvict(value = "suscripciones", key = "#usuarioId")
+    public void sincronizarEstadoSuscripcion(Long usuarioId) {
+        Usuario usuario = usuarioRepository.findById(usuarioId)
+            .orElseThrow(() -> new RuntimeException("Usuario no encontrado"));
+        
+        Optional<Suscripcion> suscripcionOpt = suscripcionRepository
+            .findFirstByUsuarioIdAndEstadoOrderByFechaCreacionDesc(usuarioId, Suscripcion.EstadoSuscripcion.ACTIVA);
+        
+        LocalDate hoy = LocalDate.now();
+        boolean deberiaEstarActiva = false;
+        
+        if (suscripcionOpt.isPresent()) {
+            Suscripcion suscripcion = suscripcionOpt.get();
+            
+            // Verificar si está vencida
+            if (suscripcion.getFechaVencimiento() != null &&
+                suscripcion.getFechaVencimiento().isBefore(hoy)) {
+                // Marcar como vencida si no lo está
+                if (suscripcion.getEstado() == Suscripcion.EstadoSuscripcion.ACTIVA) {
+                    suscripcion.setEstado(Suscripcion.EstadoSuscripcion.VENCIDA);
+                    suscripcionRepository.save(suscripcion);
+                }
+            } else if (suscripcion.getEstado() == Suscripcion.EstadoSuscripcion.ACTIVA) {
+                deberiaEstarActiva = true;
+            }
+        }
+        
+        // Actualizar estado del usuario solo si cambió
+        if (usuario.getSuscripcionActiva() != deberiaEstarActiva) {
+            usuario.setSuscripcionActiva(deberiaEstarActiva);
+            usuarioRepository.save(usuario);
+        }
     }
     
     /**

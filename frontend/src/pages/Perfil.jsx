@@ -35,6 +35,15 @@ export default function Perfil() {
 
   // Cargar datos de suscripción
   useEffect(() => {
+    // Verificar si hay un error de suscripción en sessionStorage
+    const subscriptionError = sessionStorage.getItem('subscriptionError')
+    if (subscriptionError) {
+      toast.error(subscriptionError, { autoClose: 10000 })
+      sessionStorage.removeItem('subscriptionError')
+      // Asegurar que estemos en la pestaña de suscripción
+      setActiveTab('suscripcion')
+    }
+
     const cargarSuscripcion = async () => {
       try {
         setLoadingSuscripcion(true)
@@ -48,10 +57,20 @@ export default function Perfil() {
             monto: response.data.montoCOP ? parseFloat(response.data.montoCOP) : (response.data.tipo === 'ANUAL' ? 432000 : 40000),
             montoCOP: response.data.montoCOP ? parseFloat(response.data.montoCOP) : (response.data.tipo === 'ANUAL' ? 432000 : 40000)
           })
+          
+          // Mostrar alerta si la suscripción está vencida
+          if (response.data.estado === 'VENCIDA' || response.data.estado === 'SIN_SUSCRIPCION') {
+            toast.warning('Tu suscripción ha vencido. Por favor renueva para continuar usando la aplicación.', {
+              autoClose: 15000
+            })
+          }
         }
       } catch (error) {
         console.error('Error al cargar suscripción:', error)
-        // Mantener valores por defecto
+        // Si es error 403, ya se manejó en el interceptor
+        if (error.response?.status !== 403) {
+          // Mantener valores por defecto
+        }
       } finally {
         setLoadingSuscripcion(false)
       }
@@ -61,6 +80,15 @@ export default function Perfil() {
       cargarSuscripcion()
     }
   }, [user])
+  
+  // Verificar query params para activar pestaña de suscripción
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    const tab = params.get('tab')
+    if (tab === 'suscripcion') {
+      setActiveTab('suscripcion')
+    }
+  }, [])
 
   // Cambio de contraseña
   const [passwordData, setPasswordData] = useState({

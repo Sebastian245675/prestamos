@@ -35,8 +35,26 @@ api.interceptors.response.use(
         window.location.href = '/login'
       }
     } else if (error.response?.status === 403) {
-      // Solo redirigir si el mensaje indica que es un problema de autenticación
       const errorMessage = error.response?.data?.message || ''
+      const errorCode = error.response?.data?.code || ''
+      
+      // Verificar si es error de suscripción vencida
+      if (errorCode === 'SUBSCRIPTION_EXPIRED' || 
+          errorMessage.includes('Suscripción vencida') || 
+          errorMessage.includes('suscripción') ||
+          errorMessage.includes('renueva tu suscripción')) {
+        console.error('Suscripción vencida (403):', error.response?.data)
+        
+        // No cerrar sesión, pero redirigir a perfil/suscripción
+        if (window.location.pathname !== '/perfil' && !window.location.pathname.includes('/suscripcion')) {
+          // Guardar el mensaje de error para mostrarlo
+          sessionStorage.setItem('subscriptionError', errorMessage)
+          window.location.href = '/perfil?tab=suscripcion'
+        }
+        return Promise.reject(error)
+      }
+      
+      // Verificar si es error de autenticación
       const isAuthError = errorMessage.includes('autenticado') || 
                           errorMessage.includes('autenticación') ||
                           errorMessage.includes('Token') ||

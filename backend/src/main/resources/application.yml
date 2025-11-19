@@ -8,6 +8,7 @@ spring:
     # Las credenciales se cargan desde el archivo .env
     url: ${spring.datasource.url:${DB_URL:jdbc:postgresql://aws-1-us-east-1.pooler.supabase.com:6543/postgres?sslmode=require&prepareThreshold=0}}
     username: ${spring.datasource.username:${DB_USERNAME:postgres.ijjskcroggxijvxronqy}}
+    
     password: ${spring.datasource.password:${DB_PASSWORD:454aA34345//}}
     driver-class-name: org.postgresql.Driver
     hikari:
@@ -44,9 +45,9 @@ spring:
   
   cache:
     type: simple
-    cache-names: prestamos, usuarios
+    cache-names: prestamos, usuarios, suscripciones
     simple:
-      cache-spec: maximumSize=500,expireAfterWrite=10m
+      cache-spec: maximumSize=1000,expireAfterWrite=5m
 
 server:
   address: 0.0.0.0  # Escuchar en todas las interfaces (necesario para fly.io)
