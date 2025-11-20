@@ -23,17 +23,27 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 
-@Component
-@RequiredArgsConstructor
 @Slf4j
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
     private final JwtUtil jwtUtil;
     private final ObjectMapper objectMapper;
-    @Lazy
-    private final com.prestamos.service.UsuarioService usuarioService;
-    @Lazy
-    private final com.prestamos.service.SuscripcionService suscripcionService;
+    private com.prestamos.service.UsuarioService usuarioService;
+    private com.prestamos.service.SuscripcionService suscripcionService;
+    
+    public JwtAuthenticationFilter(JwtUtil jwtUtil, ObjectMapper objectMapper) {
+        this.jwtUtil = jwtUtil;
+        this.objectMapper = objectMapper;
+    }
+    
+    // Setters para inyección lazy de dependencias que pueden causar ciclo
+    public void setUsuarioService(com.prestamos.service.UsuarioService usuarioService) {
+        this.usuarioService = usuarioService;
+    }
+    
+    public void setSuscripcionService(com.prestamos.service.SuscripcionService suscripcionService) {
+        this.suscripcionService = suscripcionService;
+    }
 
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)

@@ -1,6 +1,8 @@
 package com.prestamos.config;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.ApplicationContext;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Lazy;
@@ -26,9 +28,25 @@ import java.util.Arrays;
 @EnableMethodSecurity(prePostEnabled = true)
 public class SecurityConfig {
     
+    @Autowired
+    private ApplicationContext applicationContext;
+    
     @Bean
     public PasswordEncoder passwordEncoder() {
         return new BCryptPasswordEncoder(12); // Alto costo para mayor seguridad
+    }
+    
+    @Bean
+    @Lazy
+    public JwtAuthenticationFilter jwtAuthenticationFilter(
+            JwtUtil jwtUtil,
+            ObjectMapper objectMapper) {
+        JwtAuthenticationFilter filter = new JwtAuthenticationFilter(jwtUtil, objectMapper);
+        // Inyectar dependencias de forma lazy para evitar ciclo
+        // Estas se inyectarán después de que SecurityConfig esté completamente inicializado
+        filter.setUsuarioService(applicationContext.getBean(com.prestamos.service.UsuarioService.class));
+        filter.setSuscripcionService(applicationContext.getBean(com.prestamos.service.SuscripcionService.class));
+        return filter;
     }
     
     @Bean
